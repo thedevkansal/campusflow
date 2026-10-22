@@ -10,9 +10,13 @@ import {
 } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from '@/context/auth-context';
+import { refreshAccessToken, TOKEN_KEY } from '@/lib/api';
 
 const SOCKET_URL =
   process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001';
+
+// Errors the backend socket auth middleware rejects a handshake with.
+const AUTH_ERRORS = new Set(['AUTH_INVALID_TOKEN', 'AUTH_TOKEN_REVOKED', 'AUTH_REQUIRED']);
 
 interface SocketContextType {
   passengerSocket: Socket | null;
@@ -24,24 +28,51 @@ const SocketContext = createContext<SocketContextType>({
   driverSocket: null,
 });
 
+/**
+ * Create a namespace socket whose handshake always reads the *current* access
+ * token, so reconnects after a token refresh authenticate with the new token.
+ * A handshake rejected by the auth middleware is not retried by socket.io, so on
+ * an auth error we refresh the token once and reconnect manually.
+ */
+function createSocket(namespace: 'passenger' | 'driver'): Socket {
+  const socket = io(`${SOCKET_URL}/${namespace}`, {
+    auth: (cb) => cb({ token: localStorage.getItem(TOKEN_KEY) }),
+    reconnection: true,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 30000,
+    randomizationFactor: 0.5,
+  });
+
+  let refreshing = false;
+  socket.on('connect_error', async (err) => {
+    if (!AUTH_ERRORS.has(err.message) || refreshing) return;
+    refreshing = true;
+    const newToken = await refreshAccessToken();
+    refreshing = false;
+    if (newToken) socket.connect();
+    else window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+  });
+
+  return socket;
+}
+
 export function SocketProvider({ children }: { children: ReactNode }) {
-  const { isAuthenticated, isLoading, role, token } = useAuth();
+  const { isAuthenticated, isLoading, role, user } = useAuth();
 
   // Use state (not ref) so context consumers re-render when socket becomes available.
   const [passengerSocket, setPassengerSocket] = useState<Socket | null>(null);
   const [driverSocket, setDriverSocket] = useState<Socket | null>(null);
 
-  // Prevent double-creation in React Strict Mode and fast re-renders.
-  const creatingPassenger = useRef(false);
-  const creatingDriver = useRef(false);
+  // Which user the live sockets belong to — prevents double-creation in React
+  // Strict Mode and recreates sockets when a different user logs in.
+  const socketOwner = useRef<string | null>(null);
+
+  const userId = user?.id ?? null;
 
   useEffect(() => {
     if (isLoading) return;
 
-    const authToken =
-      token ?? (typeof window !== 'undefined' ? localStorage.getItem('token') : null);
-
-    if (!isAuthenticated || !authToken) {
+    if (!isAuthenticated || !userId) {
       // Logged out — tear down any open sockets
       setPassengerSocket((prev) => {
         prev?.disconnect();
@@ -51,44 +82,24 @@ export function SocketProvider({ children }: { children: ReactNode }) {
         prev?.disconnect();
         return null;
       });
-      creatingPassenger.current = false;
-      creatingDriver.current = false;
+      socketOwner.current = null;
       return;
     }
 
-    // Connect the role-appropriate namespace once. We guard with a ref to
-    // prevent double-creation when the effect re-runs before the first
-    // setState has propagated (e.g. Strict Mode double-invoke).
-    if (role === 'PASSENGER' && !creatingPassenger.current) {
-      creatingPassenger.current = true;
-      setPassengerSocket((prev) => {
-        if (prev?.connected || prev?.active) return prev; // already live
-        prev?.disconnect();
-        return io(`${SOCKET_URL}/passenger`, {
-          auth: { token: authToken },
-          reconnection: true,
-          reconnectionDelay: 1000,
-          reconnectionDelayMax: 30000,
-          randomizationFactor: 0.5,
-        });
-      });
-    }
+    const ownerKey = `${userId}:${role}`;
+    if (socketOwner.current === ownerKey) return;
+    socketOwner.current = ownerKey;
 
-    if (role === 'DRIVER' && !creatingDriver.current) {
-      creatingDriver.current = true;
-      setDriverSocket((prev) => {
-        if (prev?.connected || prev?.active) return prev;
-        prev?.disconnect();
-        return io(`${SOCKET_URL}/driver`, {
-          auth: { token: authToken },
-          reconnection: true,
-          reconnectionDelay: 1000,
-          reconnectionDelayMax: 30000,
-          randomizationFactor: 0.5,
-        });
-      });
-    }
-  }, [isAuthenticated, isLoading, role, token]);
+    // Connect the role-appropriate namespace once per user session.
+    setPassengerSocket((prev) => {
+      prev?.disconnect();
+      return role === 'PASSENGER' ? createSocket('passenger') : null;
+    });
+    setDriverSocket((prev) => {
+      prev?.disconnect();
+      return role === 'DRIVER' ? createSocket('driver') : null;
+    });
+  }, [isAuthenticated, isLoading, role, userId]);
 
   return (
     <SocketContext.Provider value={{ passengerSocket, driverSocket }}>
