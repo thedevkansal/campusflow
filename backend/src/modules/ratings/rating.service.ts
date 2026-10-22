@@ -5,7 +5,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { Rating, RideStatus } from '@prisma/client';
+import { Prisma, Rating, RideStatus } from '@prisma/client';
 import { RatingRepository } from './rating.repository';
 import { CreateRatingDto } from './dto/create-rating.dto';
 import { DriversRepository } from '@modules/drivers/drivers.repository';
@@ -72,13 +72,22 @@ export class RatingService {
       throw new ConflictException({ message: 'You have already rated this ride', code: 'RATING_DUPLICATE' });
     }
 
-    const rating = await this.repo.create({
-      rideId: dto.rideId,
-      reviewerId,
-      revieweeId,
-      score: dto.score,
-      comment: dto.comment,
-    });
+    let rating: Rating;
+    try {
+      rating = await this.repo.create({
+        rideId: dto.rideId,
+        reviewerId,
+        revieweeId,
+        score: dto.score,
+        comment: dto.comment,
+      });
+    } catch (err) {
+      // Concurrent duplicate submit — @@unique([rideId, reviewerId]) is the real guard
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new ConflictException({ message: 'You have already rated this ride', code: 'RATING_DUPLICATE' });
+      }
+      throw err;
+    }
 
     // Update aggregates (non-blocking — errors don't fail the request)
     await Promise.all([
@@ -89,7 +98,19 @@ export class RatingService {
     return this.toDto(rating);
   }
 
-  async getRatingsForRide(rideId: string): Promise<RatingData[]> {
+  /** Only the ride's passenger, its assigned driver, or an admin may read its ratings. */
+  async getRatingsForRide(rideId: string, callerId: string, callerRole: Role): Promise<RatingData[]> {
+    if (callerRole !== Role.ADMIN) {
+      const ride = await this.repo.getRideForRating(rideId);
+      if (!ride) throw new NotFoundException({ message: 'Ride not found', code: 'RIDE_NOT_FOUND' });
+
+      const isParticipant =
+        ride.passengerId === callerId || ride.assignment?.driver.userId === callerId;
+      if (!isParticipant) {
+        throw new ForbiddenException({ message: 'Not your ride', code: 'RIDE_NOT_OWNED' });
+      }
+    }
+
     const rows = await this.repo.findByRideId(rideId);
     return rows.map(this.toDto);
   }
