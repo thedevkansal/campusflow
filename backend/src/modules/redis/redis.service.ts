@@ -69,6 +69,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     driversOnline: () => `drivers:online`,
     rideActive: (rideId: string) => `ride:active:${rideId}`,
     rideLock: (rideId: string) => `ride:lock:${rideId}`,
+    rideCreateLock: (passengerId: string) => `ride:create_lock:${passengerId}`,
+    driverLocationFlush: (driverId: string) => `driver:location_flush:${driverId}`,
     rideAcceptanceDeadline: (rideId: string) => `ride:acceptance_deadline:${rideId}`,
     jwtBlacklist: (jti: string) => `auth:blacklist:${jti}`,
     refreshToken: (userId: string, tokenFamily: string) =>
@@ -130,6 +132,24 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
   async incr(key: string): Promise<number> {
     return this.client.incr(key);
+  }
+
+  /**
+   * Fixed-window counter: initialise with TTL if absent, then increment — in one
+   * MULTI so the key can never expire between the two steps and be left without
+   * a TTL (which would block the caller forever). Returns the new count.
+   */
+  async incrWithWindow(key: string, windowSeconds: number): Promise<number> {
+    const results = await this.client
+      .multi()
+      .set(key, '0', 'EX', windowSeconds, 'NX')
+      .incr(key)
+      .exec();
+    const incrResult = results?.[1];
+    if (!incrResult || incrResult[0]) {
+      throw incrResult?.[0] ?? new Error(`Redis MULTI failed for key ${key}`);
+    }
+    return incrResult[1] as number;
   }
 
   async sadd(key: string, ...members: string[]): Promise<number> {

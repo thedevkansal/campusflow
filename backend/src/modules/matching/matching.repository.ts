@@ -11,7 +11,7 @@
 
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@prisma/prisma.service';
-import { RideStatus, RideEventType } from '@prisma/client';
+import { DriverStatus, RideStatus, RideEventType } from '@prisma/client';
 
 @Injectable()
 export class MatchingRepository {
@@ -27,6 +27,14 @@ export class MatchingRepository {
       select: { status: true },
     });
     return ride?.status ?? null;
+  }
+
+  async getPassengerId(rideId: string): Promise<string | null> {
+    const ride = await this.prisma.ride.findUnique({
+      where: { id: rideId },
+      select: { passengerId: true },
+    });
+    return ride?.passengerId ?? null;
   }
 
   /**
@@ -66,6 +74,13 @@ export class MatchingRepository {
         data: { status: RideStatus.ASSIGNED },
       });
 
+      // PostgreSQL is the source of truth for driver availability — mark BUSY in the
+      // same transaction so an expired Redis status key can never re-expose this driver.
+      await tx.driver.update({
+        where: { id: driverId },
+        data: { status: DriverStatus.BUSY },
+      });
+
       await tx.rideEvent.create({
         data: { rideId, eventType: RideEventType.ASSIGNED, payload: { driverId } },
       });
@@ -76,34 +91,46 @@ export class MatchingRepository {
 
   /**
    * Transition ride to NO_DRIVER_FOUND (terminal state).
+   * Only applies while the ride is still SEARCHING — a concurrent passenger
+   * cancel must not be overwritten. Returns false if the ride had moved on.
    * Source: docs/RIDE_STATE_MACHINE.md §SEARCHING→NO_DRIVER_FOUND
    */
-  async transitionToNoDriverFound(rideId: string): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
-      await tx.ride.update({
-        where: { id: rideId },
+  async transitionToNoDriverFound(rideId: string): Promise<boolean> {
+    return this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.ride.updateMany({
+        where: { id: rideId, status: RideStatus.SEARCHING },
         data: { status: RideStatus.NO_DRIVER_FOUND },
       });
+      if (count === 0) return false;
       await tx.rideEvent.create({
         data: { rideId, eventType: RideEventType.NO_DRIVER_FOUND },
       });
+      return true;
     });
   }
 
   /**
-   * Transition ride to TIMED_OUT (terminal state).
-   * Called by the acceptance-timeout BullMQ job.
+   * Transition ride to TIMED_OUT (terminal state) and release the driver.
+   * Called by the acceptance-timeout BullMQ job. Only applies while the ride is
+   * still ASSIGNED — a driver accept/cancel or passenger cancel wins the race.
+   * Returns false if the ride had moved on.
    * Source: docs/RIDE_STATE_MACHINE.md §ASSIGNED→TIMED_OUT
    */
-  async transitionToTimedOut(rideId: string): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
-      await tx.ride.update({
-        where: { id: rideId },
+  async transitionToTimedOut(rideId: string, driverId: string): Promise<boolean> {
+    return this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.ride.updateMany({
+        where: { id: rideId, status: RideStatus.ASSIGNED },
         data: { status: RideStatus.TIMED_OUT },
       });
+      if (count === 0) return false;
       await tx.rideEvent.create({
         data: { rideId, eventType: RideEventType.TIMED_OUT },
       });
+      await tx.driver.update({
+        where: { id: driverId },
+        data: { status: DriverStatus.ONLINE },
+      });
+      return true;
     });
   }
 }

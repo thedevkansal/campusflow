@@ -142,12 +142,36 @@ export class RideEventsService {
     driverId: string,
   ): Promise<void> {
     const payload = { rideId, status: 'COMPLETED', timestamp: new Date().toISOString() };
-    this.passengerNsp.to(`ride:${rideId}`).emit('ride_completed', payload);
+    // Target the passenger's personal room — they may not be in ride:{rideId}
+    // if their socket was offline when the ride was assigned.
+    this.passengerNsp.to(`passenger:${passengerId}`).emit('ride_completed', payload);
+    this.driverNsp.to(`driver:${driverId}`).emit('ride_completed', payload);
     await this.redis.del(this.redis.keys.driverActiveRide(driverId));
     // Leave ride room — SOCKET_PROTOCOL.md §Room Structure (terminal state cleanup)
     this.driverNsp.in(`driver:${driverId}`).socketsLeave(`ride:${rideId}`);
     this.passengerNsp.in(`passenger:${passengerId}`).socketsLeave(`ride:${rideId}`);
     this.logger.debug(`ride_completed emitted: rideId=${rideId}`);
+  }
+
+  /**
+   * Emit a system-driven terminal transition (NO_DRIVER_FOUND, TIMED_OUT) as
+   * ride_updated, and clean up the same caches/rooms as a cancellation.
+   */
+  async emitRideEnded(
+    rideId: string,
+    passengerId: string,
+    driverId: string | null,
+    status: string,
+  ): Promise<void> {
+    const payload = { rideId, status, timestamp: new Date().toISOString() };
+    this.passengerNsp.to(`passenger:${passengerId}`).emit('ride_updated', payload);
+    if (driverId) {
+      this.driverNsp.to(`driver:${driverId}`).emit('ride_updated', payload);
+      await this.redis.del(this.redis.keys.driverActiveRide(driverId));
+      this.driverNsp.in(`driver:${driverId}`).socketsLeave(`ride:${rideId}`);
+    }
+    this.passengerNsp.in(`passenger:${passengerId}`).socketsLeave(`ride:${rideId}`);
+    this.logger.debug(`ride_updated (terminal) emitted: rideId=${rideId} status=${status}`);
   }
 
   /**

@@ -43,6 +43,7 @@ const DRIVER_LOCATION_TTL = 30;
 /** Rate limit: 120 events / 60s = 2/sec — SOCKET_PROTOCOL.md driver:location */
 const LOCATION_RATE_LIMIT_WINDOW_S = 60;
 const LOCATION_RATE_LIMIT_MAX = 120;
+const LOCATION_FLUSH_INTERVAL_S = 10;
 
 interface DriverLocationPayload {
   driverId?: string;
@@ -130,12 +131,17 @@ export class DriverGateway
 
     // Rate limit — 120 events / 60s per driver (REDIS_SCHEMA §11)
     const rlKey = this.redis.keys.rateLimitCounter('socket_location', userId);
-    const count = await this.redis.incr(rlKey);
-    if (count === 1) {
-      await this.redis.expire(rlKey, LOCATION_RATE_LIMIT_WINDOW_S);
-    }
+    const count = await this.redis.incrWithWindow(rlKey, LOCATION_RATE_LIMIT_WINDOW_S);
     if (count > LOCATION_RATE_LIMIT_MAX) {
       this.baseGateway.emitError(socket, 'RATE_LIMIT_EXCEEDED', 'Location update rate limit exceeded', 'driver:location');
+      return;
+    }
+
+    // Only ONLINE/BUSY drivers may publish location — an OFFLINE driver must
+    // never re-enter drivers:geo. Redis primary, PostgreSQL fallback.
+    const status = await this.resolveActiveStatus(driverId);
+    if (!status) {
+      this.baseGateway.emitError(socket, 'DRIVER_NOT_ONLINE', 'Go online before sharing location', 'driver:location');
       return;
     }
 
@@ -156,20 +162,24 @@ export class DriverGateway
     await this.redis.expire(locationKey, DRIVER_LOCATION_TTL);
 
     // Slide driver:status TTL on every location heartbeat (REDIS_SCHEMA §1)
-    const status = await this.redis.get(this.redis.keys.driverStatus(driverId));
-    if (status) {
-      await this.redis.set(this.redis.keys.driverStatus(driverId), status, DRIVER_STATUS_TTL);
-    }
+    await this.redis.set(this.redis.keys.driverStatus(driverId), status, DRIVER_STATUS_TTL);
 
-    // Enqueue async DB persistence — do NOT write to PostgreSQL directly (ARCHITECTURE)
-    void this.locationQueue.add(JOB_NAMES.FLUSH_DRIVER_LOCATION, {
-      driverId,
-      latitude: payload.latitude,
-      longitude: payload.longitude,
-      heading: payload.heading,
-      speed: payload.speed,
-      timestamp: now,
-    });
+    // Enqueue async DB persistence — do NOT write to PostgreSQL directly (ARCHITECTURE).
+    // Redis already holds the live position; PostgreSQL only needs a periodic
+    // fallback copy, so persist at most once per LOCATION_FLUSH_INTERVAL_S per driver.
+    const shouldFlush = await this.redis.setNx(
+      this.redis.keys.driverLocationFlush(driverId), '1', LOCATION_FLUSH_INTERVAL_S,
+    );
+    if (shouldFlush) {
+      void this.locationQueue.add(JOB_NAMES.FLUSH_DRIVER_LOCATION, {
+        driverId,
+        latitude: payload.latitude,
+        longitude: payload.longitude,
+        heading: payload.heading,
+        speed: payload.speed,
+        timestamp: now,
+      });
+    }
 
     // Broadcast to ride room if driver has an active ride (SOCKET_PROTOCOL.md driver:location_update)
     const activeRideRaw = await this.redis.get(this.redis.keys.driverActiveRide(driverId));
@@ -195,6 +205,22 @@ export class DriverGateway
    * Session restore — client sends after reconnect to fetch missed events.
    * SOCKET_PROTOCOL.md §Reconnection Handling
    */
+  /**
+   * Returns 'ONLINE' | 'BUSY' when the driver is allowed to publish location,
+   * null when OFFLINE. Re-seeds the Redis status key from PostgreSQL on a miss.
+   */
+  private async resolveActiveStatus(driverId: string): Promise<string | null> {
+    const cached = await this.redis.get(this.redis.keys.driverStatus(driverId));
+    if (cached) return cached === 'OFFLINE' ? null : cached;
+
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: driverId },
+      select: { status: true },
+    });
+    if (!driver || driver.status === 'OFFLINE') return null;
+    return driver.status;
+  }
+
   @SubscribeMessage('session:restore')
   async handleSessionRestore(
     @ConnectedSocket() socket: Socket,

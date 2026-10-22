@@ -51,6 +51,16 @@ export const JOB_NAMES = {
   CLEANUP_STALE_DRIVERS: 'cleanup-stale-drivers',
 } as const;
 
+/**
+ * Custom BullMQ job IDs. BullMQ rejects custom IDs containing ':' (unless they
+ * have exactly three ':'-separated parts), so IDs use '-' as the separator.
+ * Every enqueue and getJob() lookup must go through these builders.
+ */
+export const JOB_IDS = {
+  matchRide: (rideId: string, attemptNumber: number) => `matching-${rideId}-${attemptNumber}`,
+  acceptanceTimeout: (rideId: string) => `acceptance-timeout-${rideId}`,
+} as const;
+
 /** BullMQ default job options per queue */
 export const QUEUE_JOB_OPTIONS = {
   [QUEUE_NAMES.RIDE_MATCHING]: {

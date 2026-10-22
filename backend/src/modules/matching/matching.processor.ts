@@ -26,7 +26,7 @@ import { AppConfigService } from '@common/config/app-config.service';
 import { RideEventsService } from '@modules/gateway/ride-events.service';
 import { NotificationService } from '@modules/notifications/notification.service';
 import { DriversRepository } from '@modules/drivers/drivers.repository';
-import { QUEUE_NAMES, JOB_NAMES } from '@modules/queue/queue.constants';
+import { QUEUE_NAMES, JOB_NAMES, JOB_IDS } from '@modules/queue/queue.constants';
 
 // ── Job payload interfaces ────────────────────────────────────────────────────
 
@@ -92,9 +92,7 @@ export class MatchingProcessor extends WorkerHost {
     );
 
     if (candidates.length === 0) {
-      await this.matchingRepository.transitionToNoDriverFound(rideId);
-      await this.redis.del(this.redis.keys.rideActive(rideId));
-      await this.redis.del(this.redis.keys.rideLock(rideId));
+      await this.endWithNoDriver(rideId, job.data.passengerId);
       this.logger.log(`No driver found: rideId=${rideId}`);
       return;
     }
@@ -151,7 +149,7 @@ export class MatchingProcessor extends WorkerHost {
         { rideId, assignedDriverId: candidate.driverId } satisfies AcceptanceTimeoutPayload,
         {
           delay: windowMs,
-          jobId: `acceptance-timeout:${rideId}`,
+          jobId: JOB_IDS.acceptanceTimeout(rideId),
           removeOnComplete: true,
           removeOnFail: false,
         },
@@ -175,11 +173,20 @@ export class MatchingProcessor extends WorkerHost {
 
     if (!assigned) {
       // All candidates tried; none succeeded
-      await this.matchingRepository.transitionToNoDriverFound(rideId);
-      await this.redis.del(this.redis.keys.rideActive(rideId));
-      await this.redis.del(this.redis.keys.rideLock(rideId));
+      await this.endWithNoDriver(rideId, job.data.passengerId);
       this.logger.log(`No driver available after filtering all candidates: rideId=${rideId}`);
     }
+  }
+
+  /** SEARCHING → NO_DRIVER_FOUND, with cache cleanup and passenger notification. */
+  private async endWithNoDriver(rideId: string, passengerId: string): Promise<void> {
+    const transitioned = await this.matchingRepository.transitionToNoDriverFound(rideId);
+    await this.redis.del(this.redis.keys.rideActive(rideId));
+    await this.redis.del(this.redis.keys.rideLock(rideId));
+    if (!transitioned) return; // ride was cancelled concurrently — nothing to announce
+
+    await this.rideEventsService.emitRideEnded(rideId, passengerId, null, RideStatus.NO_DRIVER_FOUND);
+    void this.notificationService.createRideNoDriver(passengerId, rideId);
   }
 
   // ── acceptance-timeout ────────────────────────────────────────────────────
@@ -191,8 +198,11 @@ export class MatchingProcessor extends WorkerHost {
     // Source: MATCHING_ENGINE.md §Step 7 "If no response (timeout fires)"
     const deadlineExists = await this.redis.exists(this.redis.keys.rideAcceptanceDeadline(rideId));
     if (!deadlineExists) return;
+    await this.redis.del(this.redis.keys.rideAcceptanceDeadline(rideId));
 
-    await this.matchingRepository.transitionToTimedOut(rideId);
+    // PostgreSQL decides: only an ASSIGNED ride can time out
+    const timedOut = await this.matchingRepository.transitionToTimedOut(rideId, assignedDriverId);
+    if (!timedOut) return;
 
     // Redis cleanup + driver reset
     await this.redis.del(this.redis.keys.rideActive(rideId));
@@ -203,6 +213,15 @@ export class MatchingProcessor extends WorkerHost {
     const newCount = await this.redis.incr(this.redis.keys.driverTimeoutCount(assignedDriverId));
     if (newCount === 1) {
       await this.redis.expire(this.redis.keys.driverTimeoutCount(assignedDriverId), 86400);
+    }
+
+    const passengerId = await this.matchingRepository.getPassengerId(rideId);
+    if (passengerId) {
+      await this.rideEventsService.emitRideEnded(
+        rideId, passengerId, assignedDriverId, RideStatus.TIMED_OUT,
+      );
+      const driverUserId = await this.driversRepository.findUserIdByDriverId(assignedDriverId);
+      void this.notificationService.createRideTimedOut(passengerId, driverUserId, rideId);
     }
 
     this.logger.log(`Ride timed out: rideId=${rideId} driverId=${assignedDriverId}`);
