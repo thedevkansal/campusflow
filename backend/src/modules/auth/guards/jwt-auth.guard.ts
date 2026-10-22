@@ -17,7 +17,7 @@
  * Source: docs/RBAC.md — Error Responses table
  */
 
-import { ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import { ExecutionContext, HttpException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { Observable } from 'rxjs';
 import { AuthenticatedUser } from '@common/types';
@@ -37,6 +37,9 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     user: TUser | false,
     info: { name?: string; message?: string } | undefined,
   ): TUser {
+    // Structured errors raised by the strategy (e.g. AUTH_TOKEN_REVOKED) pass through
+    if (err instanceof HttpException) throw err;
+
     if (err || !user) {
       // Distinguish expired tokens from invalid ones
       const isExpired = info?.name === 'TokenExpiredError';

@@ -17,7 +17,14 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { api } from '@/lib/api';
+import {
+  api,
+  getErrorMessage,
+  refreshAccessToken,
+  REFRESH_TOKEN_KEY,
+  TOKEN_KEY,
+  USER_KEY,
+} from '@/lib/api';
 import { useAuth } from '@/context/auth-context';
 
 export default function RegisterPage() {
@@ -36,13 +43,14 @@ export default function RegisterPage() {
       // Step 1: Create account
       await api.post('/auth/register', { name, email, password, role });
 
-      // Step 2: Login to get token
+      // Step 2: Login to get tokens
       const loginRes = await api.post('/auth/login', { email, password });
-      const { accessToken, user: userData } = loginRes.data.data;
+      const { accessToken, refreshToken, user: userData } = loginRes.data.data;
 
-      // Persist token so subsequent calls use it
-      localStorage.setItem('token', accessToken);
-      localStorage.setItem('user', JSON.stringify(userData));
+      // Persist tokens so subsequent calls use them
+      localStorage.setItem(TOKEN_KEY, accessToken);
+      localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+      localStorage.setItem(USER_KEY, JSON.stringify(userData));
 
       if (role === 'DRIVER') {
         // Step 3: Register vehicle profile
@@ -51,28 +59,28 @@ export default function RegisterPage() {
           vehicleModel: vehicleModel || undefined,
         });
 
-        // Step 4: Re-login so the new token includes driverId
-        const reloginRes = await api.post('/auth/login', { email, password });
-        const { accessToken: freshToken, user: freshUser } = reloginRes.data.data;
-        return { token: freshToken, user: freshUser };
+        // Step 4: Refresh so the new access token includes driverId
+        // (avoids a second /auth/login, which is rate limited per IP)
+        const freshToken = await refreshAccessToken();
+        if (!freshToken) throw new Error('Could not start your driver session');
+        return {
+          token: freshToken,
+          refreshToken: localStorage.getItem(REFRESH_TOKEN_KEY) ?? undefined,
+          user: userData,
+        };
       }
 
-      return { token: accessToken, user: userData };
+      return { token: accessToken, refreshToken, user: userData };
     },
-    onSuccess: ({ token, user: userData }) => {
-      login(token, userData);
+    onSuccess: ({ token, refreshToken, user: userData }) => {
+      login(token, userData, refreshToken);
       router.push(userData.role === 'DRIVER' ? '/driver' : '/dashboard');
     },
     onError: (err: any) => {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      const msg =
-        err.response?.data?.message ||
-        (Array.isArray(err.response?.data?.errors)
-          ? err.response.data.errors[0]
-          : null) ||
-        'Registration failed. Please try again.';
-      setError(msg);
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(REFRESH_TOKEN_KEY);
+      localStorage.removeItem(USER_KEY);
+      setError(getErrorMessage(err, err?.message || 'Registration failed. Please try again.'));
     },
   });
 

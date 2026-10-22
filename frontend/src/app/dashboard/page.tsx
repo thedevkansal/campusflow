@@ -21,17 +21,32 @@ import {
   CardFooter,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Navbar } from '@/components/layout/navbar';
 import { Map } from '@/components/map';
-import { api } from '@/lib/api';
+import { api, getErrorMessage } from '@/lib/api';
 import { useSocket } from '@/context/socket-context';
 import { useRequireAuth } from '@/hooks/use-require-auth';
 import { cn } from '@/lib/utils';
 
+// Campus pickup / drop-off points. Ride requests send these real coordinates so
+// matching, fare estimates and the map all reflect the chosen route.
+const CAMPUS_PLACES = [
+  { id: 'main-gate', name: 'Main Gate', lat: 12.9716, lng: 77.5946 },
+  { id: 'library', name: 'Library', lat: 12.978, lng: 77.598 },
+  { id: 'academic-block', name: 'Academic Block', lat: 12.9748, lng: 77.5962 },
+  { id: 'hostels', name: 'Hostels', lat: 12.9695, lng: 77.5992 },
+  { id: 'sports-complex', name: 'Sports Complex', lat: 12.9762, lng: 77.5918 },
+  { id: 'cafeteria', name: 'Cafeteria', lat: 12.9731, lng: 77.5975 },
+] as const;
+
+// Matches PASSENGER_CANCELLABLE_STATUSES in backend rides.repository.ts
+// (docs/RIDE_STATE_MACHINE.md: passengers cannot cancel once the driver is ARRIVING)
+const PASSENGER_CANCELLABLE = ['REQUESTED', 'SEARCHING', 'ASSIGNED', 'ACCEPTED'];
+
 const STATUS_LABELS: Record<string, string> = {
   REQUESTED: 'Finding your driver…',
+  SEARCHING: 'Finding your driver…',
   ASSIGNED: 'Driver assigned',
   ACCEPTED: 'Driver on the way',
   ARRIVING: 'Driver arriving',
@@ -45,6 +60,7 @@ const STATUS_LABELS: Record<string, string> = {
 
 const STATUS_COLORS: Record<string, string> = {
   REQUESTED: 'bg-amber-100 text-amber-800',
+  SEARCHING: 'bg-amber-100 text-amber-800',
   ASSIGNED: 'bg-blue-100 text-blue-800',
   ACCEPTED: 'bg-blue-100 text-blue-800',
   ARRIVING: 'bg-indigo-100 text-indigo-800',
@@ -59,8 +75,8 @@ const STATUS_COLORS: Record<string, string> = {
 export default function DashboardPage() {
   const queryClient = useQueryClient();
   const { passengerSocket } = useSocket();
-  const [pickupAddr, setPickupAddr] = useState('Main Gate');
-  const [destAddr, setDestAddr] = useState('Library');
+  const [pickupId, setPickupId] = useState<string>(CAMPUS_PLACES[0].id);
+  const [destId, setDestId] = useState<string>(CAMPUS_PLACES[1].id);
   const [error, setError] = useState('');
   const [socketError, setSocketError] = useState('');
 
@@ -143,13 +159,15 @@ export default function DashboardPage() {
   // Create Ride
   const createMutation = useMutation({
     mutationFn: async () => {
+      const pickup = CAMPUS_PLACES.find((p) => p.id === pickupId)!;
+      const dest = CAMPUS_PLACES.find((p) => p.id === destId)!;
       const payload = {
-        pickupLat: 12.9716,
-        pickupLng: 77.5946,
-        pickupAddress: pickupAddr,
-        destLat: 12.978,
-        destLng: 77.598,
-        destAddress: destAddr,
+        pickupLat: pickup.lat,
+        pickupLng: pickup.lng,
+        pickupAddress: pickup.name,
+        destLat: dest.lat,
+        destLng: dest.lng,
+        destAddress: dest.name,
       };
       const res = await api.post('/rides', payload);
       return res.data.data;
@@ -159,7 +177,7 @@ export default function DashboardPage() {
       setError('');
     },
     onError: (err: any) => {
-      setError(err.response?.data?.message || 'Failed to request ride');
+      setError(getErrorMessage(err, 'Failed to request ride'));
     },
   });
 
@@ -173,21 +191,21 @@ export default function DashboardPage() {
       queryClient.invalidateQueries({ queryKey: ['activeRide'] });
     },
     onError: (err: any) => {
-      setError(err.response?.data?.message || 'Could not cancel ride');
+      setError(getErrorMessage(err, 'Could not cancel ride'));
     },
   });
 
   const handleRequestRide = (e: React.FormEvent) => {
     e.preventDefault();
+    if (pickupId === destId) {
+      setError('Pickup and destination must be different');
+      return;
+    }
     setError('');
     createMutation.mutate();
   };
 
-  const canCancel =
-    activeRide &&
-    !['IN_PROGRESS', 'COMPLETED', 'PASSENGER_CANCELLED', 'DRIVER_CANCELLED'].includes(
-      activeRide.status
-    );
+  const canCancel = activeRide && PASSENGER_CANCELLABLE.includes(activeRide.status);
 
   if (authLoading || rideLoading) {
     return (
@@ -244,10 +262,10 @@ export default function DashboardPage() {
                       </div>
                     )}
 
-                    {/* Coordinates info banner */}
+                    {/* Campus points info banner */}
                     <div className="flex items-start gap-2 bg-muted/50 text-muted-foreground text-xs px-3 py-2 rounded-lg">
                       <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                      <span>Demo coordinates used for pickup (12.9716°N, 77.5946°E) and destination.</span>
+                      <span>Choose from campus pickup and drop-off points.</span>
                     </div>
 
                     <div className="space-y-2">
@@ -255,15 +273,18 @@ export default function DashboardPage() {
                         Pickup location
                       </Label>
                       <div className="relative">
-                        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
+                        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                        <select
                           id="pickup"
-                          value={pickupAddr}
-                          onChange={(e) => setPickupAddr(e.target.value)}
-                          className="pl-9 h-10"
-                          placeholder="Pickup location name"
+                          value={pickupId}
+                          onChange={(e) => setPickupId(e.target.value)}
+                          className="w-full pl-9 h-10 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                           required
-                        />
+                        >
+                          {CAMPUS_PLACES.map((p) => (
+                            <option key={p.id} value={p.id}>{p.name}</option>
+                          ))}
+                        </select>
                       </div>
                     </div>
 
@@ -272,15 +293,18 @@ export default function DashboardPage() {
                         Destination
                       </Label>
                       <div className="relative">
-                        <Navigation className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary" />
-                        <Input
+                        <Navigation className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary pointer-events-none" />
+                        <select
                           id="destination"
-                          value={destAddr}
-                          onChange={(e) => setDestAddr(e.target.value)}
-                          className="pl-9 h-10"
-                          placeholder="Where are you going?"
+                          value={destId}
+                          onChange={(e) => setDestId(e.target.value)}
+                          className="w-full pl-9 h-10 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                           required
-                        />
+                        >
+                          {CAMPUS_PLACES.map((p) => (
+                            <option key={p.id} value={p.id}>{p.name}</option>
+                          ))}
+                        </select>
                       </div>
                     </div>
 

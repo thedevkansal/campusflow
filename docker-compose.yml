@@ -5,7 +5,7 @@
 # Services:
 #   - backend  (NestJS API on port 3001)
 #   - postgres  (PostgreSQL 16 on port 5432)
-#   - redis     (Redis 7 on port 6379)
+#   - redis     (Redis 7 on port 6379; noeviction — required by BullMQ)
 #
 # Usage:
 #   cp backend/.env.example backend/.env
@@ -51,7 +51,7 @@ services:
       --appendonly yes
       --appendfsync everysec
       --maxmemory 256mb
-      --maxmemory-policy allkeys-lru
+      --maxmemory-policy noeviction
       --save 900 1
       --save 300 10
       --save 60 10000
@@ -82,7 +82,8 @@ services:
       redis:
         condition: service_healthy
     env_file:
-      - ./backend/.env
+      # Override with BACKEND_ENV_FILE=/path/to/file to test with another env file
+      - ${BACKEND_ENV_FILE:-./backend/.env}
     environment:
       # Override URLs to use Docker service names
       DATABASE_URL: postgresql://campusflow:campusflow_dev@postgres:5432/campusflow?schema=public
@@ -92,11 +93,11 @@ services:
     volumes:
       - backend_logs:/app/logs
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 20s
+      start_period: 30s
     networks:
       - campusflow_net
 

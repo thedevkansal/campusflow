@@ -13,6 +13,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@prisma/prisma.service';
 import {
   CancelledBy,
+  DriverStatus,
   Ride,
   RideAssignment,
   RideEvent,
@@ -104,14 +105,36 @@ export class RidesRepository {
         destAddress: data.destAddress,
         estimatedDistanceKm: data.estimatedDistanceKm,
         estimatedFare: data.estimatedFare,
-        status: RideStatus.REQUESTED,
-        // Insert immutable event log entry atomically
+        // REQUESTED → SEARCHING happens immediately; write both in one statement so a
+        // crash can never leave a ride stranded at REQUESTED (MATCHING_ENGINE.md Step 1)
+        status: RideStatus.SEARCHING,
+        // Insert immutable event log entries atomically
         events: {
-          create: {
-            eventType: RideEventType.REQUESTED,
-          },
+          create: [
+            { eventType: RideEventType.REQUESTED },
+            { eventType: RideEventType.SEARCHING },
+          ],
         },
       },
+    });
+  }
+
+  /**
+   * SEARCHING → NO_DRIVER_FOUND when matching could not be started at all
+   * (e.g. the queue was unreachable). Prevents the passenger being blocked by a
+   * ride that no worker will ever pick up.
+   */
+  async failSearch(rideId: string): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.ride.updateMany({
+        where: { id: rideId, status: RideStatus.SEARCHING },
+        data: { status: RideStatus.NO_DRIVER_FOUND },
+      });
+      if (count > 0) {
+        await tx.rideEvent.create({
+          data: { rideId, eventType: RideEventType.NO_DRIVER_FOUND, payload: { reason: 'ENQUEUE_FAILED' } },
+        });
+      }
     });
   }
 
@@ -254,12 +277,25 @@ export class RidesRepository {
   async cancelByPassenger(
     rideId: string,
     cancellation: CreateCancellationInput,
-  ): Promise<Ride> {
+    releaseDriverId: string | null,
+  ): Promise<Ride | null> {
     return this.prisma.$transaction(async (tx) => {
-      const ride = await tx.ride.update({
-        where: { id: rideId },
+      // Conditional write — a concurrent transition (e.g. driver ARRIVING) wins
+      const { count } = await tx.ride.updateMany({
+        where: { id: rideId, status: { in: PASSENGER_CANCELLABLE_STATUSES } },
         data: { status: RideStatus.PASSENGER_CANCELLED },
       });
+      if (count === 0) return null;
+
+      // Driver becomes available again — PostgreSQL is the source of truth
+      if (releaseDriverId) {
+        await tx.driver.update({
+          where: { id: releaseDriverId },
+          data: { status: DriverStatus.ONLINE },
+        });
+      }
+
+      const ride = await tx.ride.findUniqueOrThrow({ where: { id: rideId } });
 
       await tx.rideEvent.create({
         data: {
@@ -277,26 +313,6 @@ export class RidesRepository {
         },
       });
 
-      return ride;
-    });
-  }
-
-  /**
-   * Transition an existing ride from REQUESTED → SEARCHING.
-   * Atomically updates status and appends the SEARCHING event.
-   * Called by RidesService.createRide() immediately after create().
-   *
-   * Source: docs/RIDE_STATE_MACHINE.md §REQUESTED→SEARCHING
-   */
-  async transitionToSearching(rideId: string): Promise<Ride> {
-    return this.prisma.$transaction(async (tx) => {
-      const ride = await tx.ride.update({
-        where: { id: rideId },
-        data: { status: RideStatus.SEARCHING },
-      });
-      await tx.rideEvent.create({
-        data: { rideId, eventType: RideEventType.SEARCHING },
-      });
       return ride;
     });
   }

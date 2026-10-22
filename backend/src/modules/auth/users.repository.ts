@@ -58,6 +58,18 @@ export class UsersRepository {
   }
 
   /**
+   * Find a user by email with their Driver id — single query for login.
+   */
+  async findByEmailWithDriver(
+    email: string,
+  ): Promise<(User & { driver: { id: string } | null }) | null> {
+    return this.prisma.user.findUnique({
+      where: { email },
+      include: { driver: { select: { id: true } } },
+    });
+  }
+
+  /**
    * Find a user by ID without relations — lightweight lookup.
    */
   async findById(id: string): Promise<User | null> {

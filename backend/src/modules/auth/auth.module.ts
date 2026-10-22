@@ -33,6 +33,7 @@ import { RateLimitService } from './rate-limit.service';
 import { JwtAccessStrategy } from './strategies/jwt-access.strategy';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { JwtRefreshGuard } from './guards/jwt-refresh.guard';
 import { RolesGuard } from './guards/roles.guard';
 
 @Module({
@@ -73,6 +74,7 @@ import { RolesGuard } from './guards/roles.guard';
     JwtAccessStrategy,
     JwtRefreshStrategy,
     JwtAuthGuard,
+    JwtRefreshGuard,
     RolesGuard,
   ],
 

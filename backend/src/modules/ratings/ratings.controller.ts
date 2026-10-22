@@ -36,8 +36,9 @@ export class RatingsController {
   @HttpCode(HttpStatus.OK)
   async getRatingsForRide(
     @Param('rideId', ParseUUIDPipe) rideId: string,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<ApiSuccessResponse<RatingData[]>> {
-    const data = await this.ratingService.getRatingsForRide(rideId);
+    const data = await this.ratingService.getRatingsForRide(rideId, user.id, user.role);
     return { success: true, data, message: 'Ratings retrieved' };
   }
 

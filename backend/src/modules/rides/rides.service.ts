@@ -18,6 +18,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  ServiceUnavailableException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
@@ -35,7 +36,7 @@ import { CancelRideDto } from './dto/cancel-ride.dto';
 import { CancelDriverDto } from './dto/cancel-driver.dto';
 import { DriversRepository } from '@modules/drivers/drivers.repository';
 import { RedisService } from '@modules/redis/redis.service';
-import { QUEUE_NAMES, JOB_NAMES, QUEUE_JOB_OPTIONS } from '@modules/queue/queue.constants';
+import { QUEUE_NAMES, JOB_NAMES, JOB_IDS, QUEUE_JOB_OPTIONS } from '@modules/queue/queue.constants';
 import { RideEventsService } from '@modules/gateway/ride-events.service';
 import { NotificationService } from '@modules/notifications/notification.service';
 import { FareEngineService } from '@modules/pricing/fare-engine.service';
@@ -122,6 +123,27 @@ export class RidesService {
     passengerId: string,
     dto: CreateRideDto,
   ): Promise<RideResponseData> {
+    // Per-passenger creation lock — closes the check-then-insert race on double submit
+    const createLockKey = this.redis.keys.rideCreateLock(passengerId);
+    const lockAcquired = await this.redis.setNx(createLockKey, '1', 10);
+    if (!lockAcquired) {
+      throw new ConflictException({
+        message: 'A ride request is already being processed',
+        code: 'RIDE_ALREADY_ACTIVE',
+      });
+    }
+
+    try {
+      return await this.createRideLocked(passengerId, dto);
+    } finally {
+      await this.redis.del(createLockKey);
+    }
+  }
+
+  private async createRideLocked(
+    passengerId: string,
+    dto: CreateRideDto,
+  ): Promise<RideResponseData> {
     // Active-ride guard — MATCHING_ENGINE.md Step 1
     const existing = await this.ridesRepository.findActiveByPassengerId(passengerId);
     if (existing) {
@@ -136,8 +158,8 @@ export class RidesService {
       dto.pickupLat, dto.pickupLng, dto.destLat, dto.destLng,
     );
 
-    // DB: create at REQUESTED, then immediately transition to SEARCHING
-    const created = await this.ridesRepository.create({
+    // DB: create directly at SEARCHING (REQUESTED + SEARCHING events in one write)
+    const ride = await this.ridesRepository.create({
       passengerId,
       pickupLat: dto.pickupLat,
       pickupLng: dto.pickupLng,
@@ -148,46 +170,59 @@ export class RidesService {
       estimatedDistanceKm: fareEstimate.distanceKm,
       estimatedFare: fareEstimate.estimatedFare,
     });
-    const ride = await this.ridesRepository.transitionToSearching(created.id);
 
-    // Redis: set ride:active hash (24h TTL) + acquire ride:lock (30s)
-    // Source: REDIS_SCHEMA.md §5, §6
-    const now = new Date().toISOString();
-    await this.redis.hset(this.redis.keys.rideActive(ride.id), {
-      status: 'SEARCHING',
-      passenger_id: passengerId,
-      driver_id: '',
-      pickup_lat: dto.pickupLat.toString(),
-      pickup_lng: dto.pickupLng.toString(),
-      dest_lat: dto.destLat.toString(),
-      dest_lng: dto.destLng.toString(),
-      created_at: now,
-      updated_at: now,
-    });
-    await this.redis.expire(this.redis.keys.rideActive(ride.id), 86400);
-    await this.redis.setNx(this.redis.keys.rideLock(ride.id), 'matching-engine', 30);
+    try {
+      // Redis: set ride:active hash (24h TTL) + acquire ride:lock (30s)
+      // Source: REDIS_SCHEMA.md §5, §6
+      const now = new Date().toISOString();
+      await this.redis.hset(this.redis.keys.rideActive(ride.id), {
+        status: 'SEARCHING',
+        passenger_id: passengerId,
+        driver_id: '',
+        pickup_lat: dto.pickupLat.toString(),
+        pickup_lng: dto.pickupLng.toString(),
+        dest_lat: dto.destLat.toString(),
+        dest_lng: dto.destLng.toString(),
+        created_at: now,
+        updated_at: now,
+      });
+      await this.redis.expire(this.redis.keys.rideActive(ride.id), 86400);
+      await this.redis.setNx(this.redis.keys.rideLock(ride.id), 'matching-engine', 30);
 
-    // BullMQ: enqueue with dedup key (5s NX) to prevent duplicate jobs
-    // Source: REDIS_SCHEMA.md §14, MATCHING_ENGINE.md §Job ID Convention
-    const dedupKey = this.redis.keys.bullDedup(QUEUE_NAMES.RIDE_MATCHING, ride.id);
-    const enqueued = await this.redis.setNx(dedupKey, ride.id, 5);
-    if (enqueued) {
-      await this.rideMatchingQueue.add(
-        JOB_NAMES.MATCH_RIDE,
-        {
-          rideId: ride.id,
-          passengerId,
-          pickupLat: dto.pickupLat,
-          pickupLng: dto.pickupLng,
-          requestedAt: ride.requestedAt.toISOString(),
-          attemptNumber: 1,
-          excludeDriverIds: [],
-        },
-        {
-          ...QUEUE_JOB_OPTIONS[QUEUE_NAMES.RIDE_MATCHING],
-          jobId: `matching:${ride.id}:1`,
-        },
-      );
+      // BullMQ: enqueue with dedup key (5s NX) to prevent duplicate jobs
+      // Source: REDIS_SCHEMA.md §14, MATCHING_ENGINE.md §Job ID Convention
+      const dedupKey = this.redis.keys.bullDedup(QUEUE_NAMES.RIDE_MATCHING, ride.id);
+      const enqueued = await this.redis.setNx(dedupKey, ride.id, 5);
+      if (enqueued) {
+        await this.rideMatchingQueue.add(
+          JOB_NAMES.MATCH_RIDE,
+          {
+            rideId: ride.id,
+            passengerId,
+            pickupLat: dto.pickupLat,
+            pickupLng: dto.pickupLng,
+            requestedAt: ride.requestedAt.toISOString(),
+            attemptNumber: 1,
+            excludeDriverIds: [],
+          },
+          {
+            ...QUEUE_JOB_OPTIONS[QUEUE_NAMES.RIDE_MATCHING],
+            jobId: JOB_IDS.matchRide(ride.id, 1),
+          },
+        );
+      }
+    } catch (err) {
+      // Matching could not start — close the ride so the passenger is not
+      // blocked by a SEARCHING ride no worker will ever process.
+      this.logger.error(`Failed to start matching: rideId=${ride.id}`, {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      await this.ridesRepository.failSearch(ride.id);
+      await this.redis.del(this.redis.keys.rideActive(ride.id)).catch(() => undefined);
+      throw new ServiceUnavailableException({
+        message: 'Ride matching is temporarily unavailable. Please try again.',
+        code: 'MATCHING_UNAVAILABLE',
+      });
     }
 
     this.logger.log(`Ride created + searching: rideId=${ride.id} passengerId=${passengerId}`);
@@ -379,28 +414,36 @@ export class RidesService {
     const preCancelStatus = ride.status;
     const assignedDriverId = ride.assignment?.driverId ?? null;
 
-    const cancelled = await this.ridesRepository.cancelByPassenger(rideId, {
+    const cancelled = await this.ridesRepository.cancelByPassenger(
       rideId,
-      cancelledBy: 'PASSENGER',
-      reasonCode: dto.reasonCode,
-      reasonText: dto.reasonText,
-    });
+      {
+        rideId,
+        cancelledBy: 'PASSENGER',
+        reasonCode: dto.reasonCode,
+        reasonText: dto.reasonText,
+      },
+      assignedDriverId,
+    );
+    if (!cancelled) {
+      throw new UnprocessableEntityException({
+        message: 'Ride status changed before it could be cancelled',
+        code: 'RIDE_INVALID_TRANSITION',
+      });
+    }
 
     // Redis + BullMQ cleanup — side effects per RIDE_STATE_MACHINE.md
-    if (preCancelStatus === RideStatus.SEARCHING) {
-      await this.redis.del(this.redis.keys.rideActive(rideId));
+    await this.redis.del(this.redis.keys.rideActive(rideId));
+    if (preCancelStatus === RideStatus.SEARCHING || preCancelStatus === RideStatus.REQUESTED) {
       await this.redis.del(this.redis.keys.rideLock(rideId));
-      const matchJob = await this.rideMatchingQueue.getJob(`matching:${rideId}:1`);
+      const matchJob = await this.rideMatchingQueue.getJob(JOB_IDS.matchRide(rideId, 1));
       await matchJob?.remove();
-    } else if (preCancelStatus === RideStatus.ASSIGNED && assignedDriverId) {
-      await this.redis.del(this.redis.keys.rideActive(rideId));
+    } else if (assignedDriverId) {
+      // ASSIGNED or ACCEPTED — release the driver
       await this.redis.del(this.redis.keys.driverLock(assignedDriverId));
+      await this.redis.del(this.redis.keys.rideAcceptanceDeadline(rideId));
       await this.redis.set(this.redis.keys.driverStatus(assignedDriverId), 'ONLINE', 60);
-      const timeoutJob = await this.rideMatchingQueue.getJob(`acceptance-timeout:${rideId}`);
+      const timeoutJob = await this.rideMatchingQueue.getJob(JOB_IDS.acceptanceTimeout(rideId));
       await timeoutJob?.remove();
-    } else if (preCancelStatus === RideStatus.ACCEPTED) {
-      // driver:lock already released on accept; just clean up the active cache
-      await this.redis.del(this.redis.keys.rideActive(rideId));
     }
 
     await this.rideEventsService.emitRideCancelled(
@@ -475,7 +518,7 @@ export class RidesService {
     }
 
     if (ride.status === RideStatus.SEARCHING) {
-      const matchJob = await this.rideMatchingQueue.getJob(`matching:${ride.id}:1`);
+      const matchJob = await this.rideMatchingQueue.getJob(JOB_IDS.matchRide(ride.id, 1));
       await matchJob?.remove();
       await this.redis.del(this.redis.keys.rideLock(rideId));
     }
@@ -534,7 +577,7 @@ export class RidesService {
     });
 
     // Cancel the BullMQ acceptance-timeout job
-    const timeoutJob = await this.rideMatchingQueue.getJob(`acceptance-timeout:${rideId}`);
+    const timeoutJob = await this.rideMatchingQueue.getJob(JOB_IDS.acceptanceTimeout(rideId));
     await timeoutJob?.remove();
 
     void this.rideEventsService.emitRideAccepted(rideId, ride.passengerId, driverId);
@@ -647,6 +690,12 @@ export class RidesService {
     // Redis cleanup — RIDE_STATE_MACHINE.md §ACCEPTED/ARRIVING→DRIVER_CANCELLED
     await this.redis.del(this.redis.keys.rideActive(rideId));
     await this.redis.set(this.redis.keys.driverStatus(driverId), 'ONLINE', 60);
+    // Declining while ASSIGNED: drop the pending acceptance timeout so it cannot
+    // later overwrite DRIVER_CANCELLED with TIMED_OUT
+    await this.redis.del(this.redis.keys.driverLock(driverId));
+    await this.redis.del(this.redis.keys.rideAcceptanceDeadline(rideId));
+    const timeoutJob = await this.rideMatchingQueue.getJob(JOB_IDS.acceptanceTimeout(rideId));
+    await timeoutJob?.remove();
     const newCount = await this.redis.incr(this.redis.keys.driverCancellationCount(driverId));
     if (newCount === 1) {
       await this.redis.expire(this.redis.keys.driverCancellationCount(driverId), 86400);

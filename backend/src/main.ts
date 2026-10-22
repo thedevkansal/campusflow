@@ -17,8 +17,9 @@
  */
 
 import 'reflect-metadata';
-import { NestFactory, HttpAdapterHost } from '@nestjs/core';
+import { NestFactory } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import * as Sentry from '@sentry/node';
 import helmet from 'helmet';
 import * as compression from 'compression';
@@ -26,16 +27,19 @@ import { AppModule } from './app.module';
 import { AppConfigService } from '@common/config/app-config.service';
 import { RedisIoAdapter } from '@modules/gateway/socket.adapter';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
-import { GlobalExceptionFilter } from '@common/filters/global-exception.filter';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     // Use Winston as the NestJS logger
     bufferLogs: true,
   });
 
   const config = app.get(AppConfigService);
-  const httpAdapterHost = app.get(HttpAdapterHost);
+
+  // Behind a single reverse proxy (Render / load balancer): trust the first hop so
+  // req.ip is the real client IP. Without this every client shares the proxy's IP
+  // and therefore one IP-based rate-limit bucket.
+  app.set('trust proxy', 1);
 
   // ── Step 1: Initialize Sentry ───────────────────────────────────────────────
   if (config.sentryDsn) {
@@ -50,9 +54,7 @@ async function bootstrap(): Promise<void> {
   app.useLogger(app.get(WINSTON_MODULE_NEST_PROVIDER));
 
   // ── Step 3: Global Exception Filter ────────────────────────────────────────
-  // (Also registered via APP_FILTER in AppModule — this ensures it has access
-  //  to httpAdapterHost for proper response formatting)
-  app.useGlobalFilters(new GlobalExceptionFilter(httpAdapterHost));
+  // Registered once via APP_FILTER in AppModule (receives HttpAdapterHost via DI).
 
   // ── Step 4: Security Middleware ─────────────────────────────────────────────
   app.use(helmet({
@@ -86,8 +88,6 @@ async function bootstrap(): Promise<void> {
   // ── Step 8: Graceful Shutdown ───────────────────────────────────────────────
   app.enableShutdownHooks();
 
-  console.log('Nest starting...');
-
   // ── Step 9: Start ───────────────────────────────────────────────────────────
   const port = config.port;
   await app.listen(port);
@@ -99,4 +99,9 @@ async function bootstrap(): Promise<void> {
   logger.log(`Health: http://localhost:${port}/health`);
 }
 
-void bootstrap();
+bootstrap().catch((err: unknown) => {
+  // Logger may not be initialised yet — write straight to stderr so the
+  // platform's log stream shows why startup failed.
+  console.error('Fatal: CampusFlow backend failed to start', err);
+  process.exit(1);
+});

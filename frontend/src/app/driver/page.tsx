@@ -23,7 +23,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Navbar } from '@/components/layout/navbar';
 import { Map } from '@/components/map';
-import { api } from '@/lib/api';
+import { api, getErrorMessage } from '@/lib/api';
 import { useSocket } from '@/context/socket-context';
 import { useRequireAuth } from '@/hooks/use-require-auth';
 import { cn } from '@/lib/utils';
@@ -145,13 +145,14 @@ export default function DriverDashboardPage() {
       socket.off('ride_cancelled', invalidate);
       socket.off('ride_completed', invalidate);
       socket.off('ride_updated', invalidate);
-      if (locationIntervalRef.current) clearInterval(locationIntervalRef.current);
     };
   }, [driverSocket, driverProfile, queryClient]);
 
   // Location streaming — uses Geolocation API with campus fallback
+  // Re-runs when the socket instance changes so the interval never holds a
+  // stale (null or replaced) socket reference.
   useEffect(() => {
-    if (!isOnline) {
+    if (!isOnline || !driverSocket) {
       if (locationIntervalRef.current) clearInterval(locationIntervalRef.current);
       return;
     }
@@ -175,7 +176,7 @@ export default function DriverDashboardPage() {
     return () => {
       if (locationIntervalRef.current) clearInterval(locationIntervalRef.current);
     };
-  }, [isOnline]);
+  }, [isOnline, driverSocket]);
 
   // Online toggle
   const toggleOnlineMutation = useMutation({
@@ -188,7 +189,7 @@ export default function DriverDashboardPage() {
       setError('');
     },
     onError: (err: any) => {
-      setError(err.response?.data?.message || 'Failed to update status');
+      setError(getErrorMessage(err, 'Failed to update status'));
     },
   });
 
@@ -210,7 +211,7 @@ export default function DriverDashboardPage() {
       setError('');
     },
     onError: (err: any) => {
-      setError(err.response?.data?.message || 'Action failed');
+      setError(getErrorMessage(err, 'Action failed'));
     },
   });
 

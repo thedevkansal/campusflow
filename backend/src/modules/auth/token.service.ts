@@ -21,6 +21,7 @@ import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '@prisma/prisma.service';
 import { AppConfigService } from '@common/config/app-config.service';
 import { Role } from '@common/types';
+import { RedisService } from '@modules/redis/redis.service';
 import * as bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
 
@@ -44,6 +45,7 @@ export class TokenService {
     private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
     private readonly config: AppConfigService,
+    private readonly redis: RedisService,
   ) {}
 
   /**
@@ -137,6 +139,9 @@ export class TokenService {
     }
 
     if (record.revokedAt !== null) {
+      // A rotated-out token was replayed — treat as theft and revoke every
+      // session for this user (refresh token reuse detection).
+      await this.revokeAllForUser(userId);
       throw new UnauthorizedException({
         message: 'Refresh token has been revoked',
         code: 'AUTH_TOKEN_REVOKED',
@@ -156,6 +161,50 @@ export class TokenService {
         message: 'Invalid refresh token',
         code: 'AUTH_INVALID_TOKEN',
       });
+    }
+  }
+
+  /**
+   * Verify a refresh token's signature and return its family, or null if the
+   * token is invalid or belongs to another user. Expiry is ignored — an expired
+   * token can still identify which session to revoke on logout.
+   */
+  decodeRefreshFamily(rawToken: string, expectedUserId: string): string | null {
+    try {
+      const payload = this.jwtService.verify<RefreshTokenPayload>(rawToken, {
+        secret: this.config.jwtRefreshSecret,
+        ignoreExpiration: true,
+      });
+      return payload.sub === expectedUserId ? payload.tokenFamily : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Revoke one refresh-token family (rotation and single-device logout). */
+  async revokeFamily(userId: string, tokenFamily: string): Promise<void> {
+    await this.prisma.refreshToken.updateMany({
+      where: { userId, tokenFamily, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+  }
+
+  /** Revoke every active refresh token for a user. */
+  async revokeAllForUser(userId: string): Promise<void> {
+    await this.prisma.refreshToken.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+  }
+
+  /**
+   * Blacklist an access token until it would have expired anyway.
+   * Source: docs/REDIS_SCHEMA.md — auth:blacklist:{jti}
+   */
+  async blacklistAccessToken(jti: string, expUnixSeconds: number): Promise<void> {
+    const ttl = expUnixSeconds - Math.floor(Date.now() / 1000);
+    if (ttl > 0) {
+      await this.redis.set(this.redis.keys.jwtBlacklist(jti), '1', ttl);
     }
   }
 

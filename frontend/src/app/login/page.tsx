@@ -16,7 +16,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { api } from '@/lib/api';
+import { api, getErrorMessage } from '@/lib/api';
 import { useAuth } from '@/context/auth-context';
 
 export default function LoginPage() {
@@ -32,7 +32,7 @@ export default function LoginPage() {
       return response.data.data;
     },
     onSuccess: (data) => {
-      login(data.accessToken, data.user);
+      login(data.accessToken, data.user, data.refreshToken);
       if (data.user.role === 'DRIVER') {
         router.push('/driver');
       } else {
@@ -40,9 +40,7 @@ export default function LoginPage() {
       }
     },
     onError: (err: any) => {
-      setError(
-        err.response?.data?.message || 'Login failed. Please check your credentials.'
-      );
+      setError(getErrorMessage(err, 'Login failed. Please check your credentials.'));
     },
   });
 

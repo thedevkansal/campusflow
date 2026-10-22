@@ -33,8 +33,9 @@ import {
   ProfileResponseData,
   RegisterResponseData,
 } from './dto/auth-response.dto';
-import { Role } from '@common/types';
+import { AuthenticatedUser, Role } from '@common/types';
 import { UserRole } from '@prisma/client';
+import { RefreshTokenContext } from './strategies/jwt-refresh.strategy';
 
 const BCRYPT_ROUNDS = 12;
 
@@ -65,7 +66,7 @@ export class AuthService {
 
     if (emailTaken) {
       throw new ConflictException({
-        message: `An account with email '${dto.email}' already exists`,
+        message: 'An account with this email already exists',
         code: 'USER_EMAIL_TAKEN',
       });
     }
@@ -102,10 +103,7 @@ export class AuthService {
    * Source: docs/REDIS_SCHEMA.md — auth:refresh:{userId}:{tokenFamily} (Phase 2B)
    */
   async login(dto: LoginDto): Promise<LoginResponseData> {
-    const user = await this.usersRepository.findByIdWithDriver(
-      // We need findByEmail here — reuse the simpler lookup
-      (await this.usersRepository.findByEmail(dto.email))?.id ?? '',
-    );
+    const user = await this.usersRepository.findByEmailWithDriver(dto.email);
 
     // Constant-time comparison even when user doesn't exist
     const DUMMY_HASH = '$2b$12$invalidhashfortimingnormalization000000000000000000000000';
@@ -126,21 +124,72 @@ export class AuthService {
       });
     }
 
-    const driverId = user.driver?.id;
+    this.logger.log(`User logged in: id=${user.id} role=${user.role}`);
 
+    return this.issueTokenPair(user);
+  }
+
+  /**
+   * Exchange a valid refresh token for a new access + refresh pair (rotation).
+   * The presented token's family is revoked; replaying it later revokes every
+   * session for the user (see TokenService.validateRefreshToken).
+   * The new access token re-reads driverId, so it picks up a driver profile
+   * created after the original login.
+   */
+  async refresh(ctx: RefreshTokenContext): Promise<LoginResponseData> {
+    await this.tokenService.validateRefreshToken(ctx.userId, ctx.tokenFamily, ctx.rawToken);
+
+    const user = await this.usersRepository.findByIdWithDriver(ctx.userId);
+    if (!user) {
+      throw new UnauthorizedException({ message: 'User not found', code: 'AUTH_INVALID_TOKEN' });
+    }
+    if (!user.isActive) {
+      await this.tokenService.revokeAllForUser(user.id);
+      throw new ForbiddenException({
+        message: 'Your account has been suspended',
+        code: 'AUTH_ACCOUNT_SUSPENDED',
+      });
+    }
+
+    await this.tokenService.revokeFamily(ctx.userId, ctx.tokenFamily);
+    return this.issueTokenPair(user);
+  }
+
+  /**
+   * Log out the current session: blacklist the access token and, when the
+   * client sends it, revoke the refresh token family.
+   */
+  async logout(caller: AuthenticatedUser, refreshToken?: string): Promise<void> {
+    if (caller.jti && caller.tokenExp) {
+      await this.tokenService.blacklistAccessToken(caller.jti, caller.tokenExp);
+    }
+
+    const family = refreshToken ? this.tokenService.decodeRefreshFamily(refreshToken, caller.id) : null;
+    if (family) {
+      await this.tokenService.revokeFamily(caller.id, family);
+    }
+
+    this.logger.log(`User logged out: id=${caller.id}`);
+  }
+
+  private async issueTokenPair(user: {
+    id: string;
+    email: string;
+    name: string;
+    role: string;
+    driver: { id: string } | null;
+  }): Promise<LoginResponseData> {
     const accessToken = this.tokenService.generateAccessToken({
       sub: user.id,
       email: user.email,
       role: user.role as Role,
-      driverId,
+      driverId: user.driver?.id,
     });
 
     const { token: refreshToken, tokenFamily } =
       this.tokenService.generateRefreshToken(user.id);
 
     await this.tokenService.storeRefreshToken(user.id, tokenFamily, refreshToken);
-
-    this.logger.log(`User logged in: id=${user.id} role=${user.role}`);
 
     return {
       accessToken,

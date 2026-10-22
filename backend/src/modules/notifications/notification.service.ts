@@ -65,6 +65,37 @@ export class NotificationService {
     });
   }
 
+  async createRideNoDriver(passengerId: string, rideId: string): Promise<void> {
+    await this.create({
+      userId: passengerId,
+      type: NotificationType.RIDE_NO_DRIVER,
+      title: 'No drivers available',
+      body: 'We could not find a driver nearby. Please try again in a moment.',
+      payload: { rideId },
+    });
+  }
+
+  async createRideTimedOut(passengerId: string, driverUserId: string | null, rideId: string): Promise<void> {
+    await Promise.all([
+      this.create({
+        userId: passengerId,
+        type: NotificationType.RIDE_TIMED_OUT,
+        title: 'Driver did not respond',
+        body: 'Your assigned driver did not accept in time. Please request again.',
+        payload: { rideId },
+      }),
+      driverUserId
+        ? this.create({
+            userId: driverUserId,
+            type: NotificationType.RIDE_TIMED_OUT,
+            title: 'Ride request expired',
+            body: 'You did not accept the ride in time.',
+            payload: { rideId },
+          })
+        : Promise.resolve(),
+    ]);
+  }
+
   async createRideCompleted(passengerId: string, driverUserId: string, rideId: string): Promise<void> {
     await Promise.all([
       this.create({

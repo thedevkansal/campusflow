@@ -104,11 +104,8 @@ export class RateLimitService {
   ): Promise<void> {
     const key = this.redis.keys.rateLimitCounter(config.slug, identifier);
 
-    // Initialise the key with TTL if it doesn't already exist
-    await this.redis.setNx(key, '0', config.windowSeconds);
-
-    // Increment and get the new count
-    const count = await this.redis.incr(key);
+    // Initialise with TTL if absent + increment, atomically
+    const count = await this.redis.incrWithWindow(key, config.windowSeconds);
 
     if (count > config.limit) {
       this.logger.warn(
