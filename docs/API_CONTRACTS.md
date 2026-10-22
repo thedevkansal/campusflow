@@ -10,6 +10,10 @@ POST /auth/register
 
 POST /auth/login
 
+POST /auth/refresh — `Authorization: Bearer <refreshToken>`; returns a new access + refresh pair and revokes the presented refresh token (rotation). Replaying a revoked refresh token revokes all of the user's sessions.
+
+POST /auth/logout — access token required; optional body `{ refreshToken }`. Blacklists the access token and revokes that refresh token.
+
 GET /auth/profile
 
 ## Drivers
