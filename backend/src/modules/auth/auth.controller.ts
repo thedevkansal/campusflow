@@ -25,12 +25,17 @@ import {
   HttpStatus,
   Ip,
   Post,
+  Req,
   UseGuards,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { LogoutDto } from './dto/logout.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { JwtRefreshGuard } from './guards/jwt-refresh.guard';
+import { RefreshTokenContext } from './strategies/jwt-refresh.strategy';
 import { CurrentUser } from '@common/decorators/current-user.decorator';
 import { AuthenticatedUser, ApiSuccessResponse } from '@common/types';
 import {
@@ -96,6 +101,49 @@ export class AuthController {
       success: true,
       data,
       message: 'Login successful',
+    };
+  }
+
+  /**
+   * POST /api/v1/auth/refresh
+   *
+   * Authorization: Bearer <refreshToken>. Returns a new access + refresh pair;
+   * the presented refresh token is revoked (rotation).
+   */
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtRefreshGuard)
+  async refresh(
+    @Req() req: Request & { user: RefreshTokenContext },
+  ): Promise<ApiSuccessResponse<LoginResponseData>> {
+    const data = await this.authService.refresh(req.user);
+
+    return {
+      success: true,
+      data,
+      message: 'Token refreshed',
+    };
+  }
+
+  /**
+   * POST /api/v1/auth/logout
+   *
+   * Blacklists the current access token and revokes the refresh token sent in
+   * the body (optional).
+   */
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  async logout(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: LogoutDto,
+  ): Promise<ApiSuccessResponse<null>> {
+    await this.authService.logout(user, dto.refreshToken);
+
+    return {
+      success: true,
+      data: null,
+      message: 'Logged out',
     };
   }
 

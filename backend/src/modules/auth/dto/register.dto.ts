@@ -15,6 +15,7 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { Role } from '@common/types';
 
 export class RegisterDto {
@@ -23,6 +24,7 @@ export class RegisterDto {
   @MaxLength(100, { message: 'Name must not exceed 100 characters' })
   name!: string;
 
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim().toLowerCase() : value))
   @IsEmail({}, { message: 'Must be a valid email address' })
   @MaxLength(255)
   email!: string;

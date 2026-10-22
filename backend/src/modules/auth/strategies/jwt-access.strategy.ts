@@ -12,11 +12,12 @@
  * Source: common/types/index.ts — AuthenticatedUser interface
  */
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { AppConfigService } from '@common/config/app-config.service';
 import { AuthenticatedUser, Role } from '@common/types';
+import { RedisService } from '@modules/redis/redis.service';
 
 export interface JwtAccessPayload {
   /** Subject — the user's UUID */
@@ -33,7 +34,10 @@ export interface JwtAccessPayload {
 
 @Injectable()
 export class JwtAccessStrategy extends PassportStrategy(Strategy, 'jwt') {
-  constructor(config: AppConfigService) {
+  constructor(
+    config: AppConfigService,
+    private readonly redis: RedisService,
+  ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
@@ -47,11 +51,21 @@ export class JwtAccessStrategy extends PassportStrategy(Strategy, 'jwt') {
    *
    * Source: common/types/index.ts — AuthenticatedUser
    */
-  validate(payload: JwtAccessPayload): AuthenticatedUser {
+  async validate(payload: JwtAccessPayload): Promise<AuthenticatedUser> {
+    // Tokens revoked by logout — REDIS_SCHEMA.md auth:blacklist:{jti}
+    if (payload.jti && (await this.redis.exists(this.redis.keys.jwtBlacklist(payload.jti)))) {
+      throw new UnauthorizedException({
+        message: 'Token has been revoked',
+        code: 'AUTH_TOKEN_REVOKED',
+      });
+    }
+
     return {
       id: payload.sub,
       role: payload.role,
       driverId: payload.driverId,
+      jti: payload.jti,
+      tokenExp: payload.exp,
     };
   }
 }

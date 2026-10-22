@@ -77,6 +77,8 @@ export interface AuthenticatedUser {
   id: string;
   role: Role;
   driverId?: string; // only present if role === DRIVER
+  jti?: string; // access-token ID — used to blacklist the token on logout
+  tokenExp?: number; // access-token expiry (unix seconds)
 }
 
 export interface AuthenticatedRequest extends Request {

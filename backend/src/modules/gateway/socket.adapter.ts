@@ -17,6 +17,8 @@ import Redis from 'ioredis';
 import { INestApplication, Logger } from '@nestjs/common';
 import { AppConfigService } from '@common/config/app-config.service';
 
+const REDIS_READY_TIMEOUT_MS = 15_000;
+
 export class RedisIoAdapter extends IoAdapter {
   private readonly logger = new Logger(RedisIoAdapter.name);
   private adapterConstructor!: ReturnType<typeof createAdapter>;
@@ -37,10 +39,25 @@ export class RedisIoAdapter extends IoAdapter {
      });
     const subClient = pubClient.duplicate();
 
-    await Promise.all([
-      new Promise<void>((resolve) => pubClient.once('ready', resolve)),
-      new Promise<void>((resolve) => subClient.once('ready', resolve)),
-    ]);
+    // Fail fast instead of hanging bootstrap forever when Redis is unreachable —
+    // a hung bootstrap never binds the HTTP port and the platform reports
+    // "no open ports" instead of the real error.
+    const waitReady = (client: Redis, name: string): Promise<void> =>
+      new Promise<void>((resolve, reject) => {
+        if (client.status === 'ready') return resolve();
+        const timer = setTimeout(() => {
+          reject(new Error(`Redis ${name} client not ready after ${REDIS_READY_TIMEOUT_MS}ms`));
+        }, REDIS_READY_TIMEOUT_MS);
+        client.once('ready', () => {
+          clearTimeout(timer);
+          resolve();
+        });
+        client.on('error', (err: Error) => {
+          this.logger.error(`Redis ${name} client error: ${err.message}`);
+        });
+      });
+
+    await Promise.all([waitReady(pubClient, 'pub'), waitReady(subClient, 'sub')]);
 
     this.adapterConstructor = createAdapter(pubClient, subClient);
     this.logger.log('Redis Socket.IO adapter connected');
