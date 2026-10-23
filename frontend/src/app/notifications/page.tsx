@@ -144,14 +144,14 @@ export default function NotificationsPage() {
                         <Icon className="size-4" />
                       </span>
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-baseline justify-between gap-3">
+                        <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
                           <h3
                             className={cn('font-sans text-base font-bold tracking-normal', n.isRead ? 'text-ink-muted' : 'text-ink')}
                           >
                             {!n.isRead && <span className="sr-only">Unread: </span>}
                             {n.title}
                           </h3>
-                          <time dateTime={n.createdAt} className="shrink-0 text-sm text-ink-muted">
+                          <time dateTime={n.createdAt} className="order-last shrink-0 text-sm text-ink-muted sm:order-none">
                             {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}
                           </time>
                         </div>

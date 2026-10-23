@@ -202,12 +202,18 @@ Passenger (≥1024px)                    Passenger (<768px)
 
 ## 4. Outcome
 
-Screenshots are in [`assets/redesign/`](assets/redesign/): landing, login and
-register, captured headless at 390×844 (mobile, @2x) and 1440×900 (desktop).
-`-dark` files use the OS dark scheme. The "before" shots are the existing
-`assets/*.png`. The signed-in screens (Ride, Drive, Notifications, Profile) were
-reviewed live against a local backend during the redesign. Committed captures of
-them are still to do, because they need the local Postgres/Redis stack running.
+Screenshots are in [`assets/redesign/`](assets/redesign/). They were captured
+headless at 390×844 (mobile, @2x) and 1440×900 (desktop) against a local backend
+with throwaway test accounts, driving one real ride through its lifecycle. `-dark`
+files use the OS dark scheme, and map-heavy shots are palette-quantized to keep the
+folder small. The "before" shots are the existing `assets/*.png`.
+
+| Flow | Files |
+|---|---|
+| Passenger | `ride-idle-*` (route picker), `ride-active-*` (driver on the way) |
+| Driver | `drive-online-mobile`, `drive-request-mobile` (accept/decline in the thumb zone), `drive-at-pickup-mobile` |
+| Supporting | `notifications-*`, `profile-driver-*`, `profile-passenger-mobile` |
+| Public | `landing-*`, `login-*`, `register-*` |
 
 ### What changed, screen by screen
 
@@ -230,6 +236,8 @@ Fixed during review:
 - The auth form was vertically centred on phones, leaving a large empty band, so it's
   now top-aligned below `lg`.
 - The landing sequence line overshot its last stop, so it now uses per-stop connectors.
+- Notification timestamps squeezed titles onto two lines on phones, so the time now
+  sits under the title below `sm`.
 - "Step 1…4" labels above the sequence were redundant chrome and were removed.
 - Removed backdrop blur on the header (rule: no random blur).
 - Role radios had no accessible name, so they now use `aria-labelledby`/`aria-describedby`.
@@ -263,3 +271,8 @@ Checked and kept:
   `POST /rides/estimate` would let the picker show it up front.
 - **Theme toggle.** Dark mode follows the OS. A manual override would need a stored preference.
 - Typing the `any`s in the data hooks would clear the remaining lint errors.
+- **Profile "Rides" stays 0 after a completed ride.** `totalRides` comes from
+  `GET /auth/profile`, so this is a backend count, not a UI issue.
+- **Closing the driver screen drops the driver from matching** (socket disconnect),
+  and the 15s acceptance window is short for a first-time driver. It's worth reviewing
+  together with the "driver did not respond" copy.
