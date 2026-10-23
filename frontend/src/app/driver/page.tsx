@@ -1,44 +1,33 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
+import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  MapPin,
-  Car,
-  Power,
-  Map as MapIcon,
-  Loader2,
-  AlertCircle,
-  CheckCircle2,
-  Navigation,
-  WifiOff,
-} from 'lucide-react';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Navbar } from '@/components/layout/navbar';
+import { CircleAlert, Loader2, Power, Star, WifiOff } from 'lucide-react';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { ConfirmDialog } from '@/components/ui/dialog';
+import { useToast } from '@/components/ui/toast';
+import { AppShell, MapLayout, Notice } from '@/components/layout/app-shell';
+import { RouteStops, StopText, RideProgress, LiveDot, Plate } from '@/components/ride/route-line';
 import { Map } from '@/components/map';
 import { api, getErrorMessage } from '@/lib/api';
 import { useSocket } from '@/context/socket-context';
 import { useRequireAuth } from '@/hooks/use-require-auth';
+import { DRIVER_STATUS, shortRideId } from '@/lib/ride-status';
 import { cn } from '@/lib/utils';
-
-const STATUS_LABELS: Record<string, string> = {
-  ASSIGNED: 'New ride assigned',
-  ACCEPTED: 'Heading to pickup',
-  ARRIVING: 'Arrived at pickup',
-  IN_PROGRESS: 'Ride in progress',
-  COMPLETED: 'Ride completed',
-};
 
 // Campus center fallback for when geolocation is unavailable
 const CAMPUS_LAT = 12.9716;
 const CAMPUS_LNG = 77.5946;
+
+// The one next step for each status. Labels match the toast that confirms them.
+const NEXT_ACTION: Record<string, { action: string; label: string; done: string }> = {
+  ASSIGNED: { action: 'accept', label: 'Accept ride', done: 'Ride accepted' },
+  ACCEPTED: { action: 'arrive', label: 'I’ve arrived', done: 'Marked as arrived' },
+  ARRIVING: { action: 'start', label: 'Start ride', done: 'Ride started' },
+  IN_PROGRESS: { action: 'complete', label: 'Complete ride', done: 'Ride completed' },
+};
 
 function getGeolocation(): Promise<{ latitude: number; longitude: number; heading: number; speed: number }> {
   return new Promise((resolve) => {
@@ -67,6 +56,7 @@ function getGeolocation(): Promise<{ latitude: number; longitude: number; headin
 
 export default function DriverDashboardPage() {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const { driverSocket } = useSocket();
   const [isOnline, setIsOnline] = useState(false);
   const [error, setError] = useState('');
@@ -116,7 +106,7 @@ export default function DriverDashboardPage() {
     const socket = driverSocket;
     if (!socket || !driverProfile) return;
 
-    const onConnectError = (err: Error) => setSocketError(`Live updates unavailable: ${err.message}`);
+    const onConnectError = (err: Error) => setSocketError(err.message);
     const onConnect = () => {
       setSocketError('');
       socket.emit('session:restore', {
@@ -187,6 +177,7 @@ export default function DriverDashboardPage() {
     onSuccess: (goOnline) => {
       setIsOnline(goOnline);
       setError('');
+      toast.success(goOnline ? 'You’re online' : 'You’re offline');
     },
     onError: (err: any) => {
       setError(getErrorMessage(err, 'Failed to update status'));
@@ -206,100 +197,28 @@ export default function DriverDashboardPage() {
       const res = await api.post(endpoint, payload);
       return res.data.data;
     },
-    onSuccess: () => {
+    onSuccess: (_data, { action }) => {
       queryClient.invalidateQueries({ queryKey: ['activeRide'] });
+      // The backend returns the driver to ONLINE after a ride ends; re-read it
+      // so the availability card doesn't claim the driver is offline.
+      queryClient.invalidateQueries({ queryKey: ['driverProfile'] });
       setError('');
+      const done =
+        action === 'cancel-driver'
+          ? 'Ride declined'
+          : Object.values(NEXT_ACTION).find((a) => a.action === action)?.done;
+      if (done) toast.success(done);
     },
     onError: (err: any) => {
       setError(getErrorMessage(err, 'Action failed'));
     },
   });
 
-  const renderRideActions = () => {
-    if (!activeRide) return null;
-
-    const isPending = actionMutation.isPending;
-
-    if (activeRide.status === 'ASSIGNED') {
-      return (
-        <div className="flex gap-3">
-          <Button
-            className="flex-1"
-            size="lg"
-            onClick={() => actionMutation.mutate({ action: 'accept', rideId: activeRide.id })}
-            disabled={isPending}
-          >
-            {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-            Accept Ride
-          </Button>
-          <Button
-            variant="outline"
-            size="lg"
-            onClick={() => actionMutation.mutate({ action: 'cancel-driver', rideId: activeRide.id })}
-            disabled={isPending}
-          >
-            Decline
-          </Button>
-        </div>
-      );
-    }
-
-    if (activeRide.status === 'ACCEPTED') {
-      return (
-        <Button
-          className="w-full"
-          size="lg"
-          onClick={() => actionMutation.mutate({ action: 'arrive', rideId: activeRide.id })}
-          disabled={isPending}
-        >
-          {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <MapPin className="h-4 w-4 mr-2" />}
-          Mark as Arrived
-        </Button>
-      );
-    }
-
-    if (activeRide.status === 'ARRIVING') {
-      return (
-        <Button
-          className="w-full"
-          size="lg"
-          onClick={() => actionMutation.mutate({ action: 'start', rideId: activeRide.id })}
-          disabled={isPending}
-        >
-          {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Navigation className="h-4 w-4 mr-2" />}
-          Start Ride
-        </Button>
-      );
-    }
-
-    if (activeRide.status === 'IN_PROGRESS') {
-      return (
-        <Button
-          className="w-full"
-          size="lg"
-          onClick={() => actionMutation.mutate({ action: 'complete', rideId: activeRide.id })}
-          disabled={isPending}
-        >
-          {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
-          Complete Ride
-        </Button>
-      );
-    }
-
-    return null;
-  };
-
   if (authLoading || isProfileLoading) {
     return (
-      <div className="min-h-screen flex flex-col bg-background">
-        <Navbar />
-        <main className="flex-1 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-4 text-muted-foreground">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="text-sm">Loading driver dashboard…</p>
-          </div>
-        </main>
-      </div>
+      <AppShell>
+        <MapLayout hideMapOnMobile map={<Skeleton className="size-full rounded-none" />} sheet={<DriverSkeleton />} />
+      </AppShell>
     );
   }
 
@@ -307,226 +226,221 @@ export default function DriverDashboardPage() {
   const profileNotFound = (profileError as any)?.response?.status === 404;
   if (profileNotFound || (!driverProfile && !isProfileLoading)) {
     return (
-      <div className="min-h-screen flex flex-col bg-background">
-        <Navbar />
-        <main className="flex-1 flex items-center justify-center px-4">
-          <Card className="w-full max-w-md shadow-sm text-center">
-            <CardContent className="p-8 flex flex-col items-center gap-4">
-              <div className="bg-amber-100 p-4 rounded-full">
-                <Car className="h-8 w-8 text-amber-600" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-foreground">Driver profile not set up</h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Your account doesn&apos;t have a driver profile yet. Please register again as a driver.
-                </p>
-              </div>
-              <Button variant="outline" onClick={() => window.location.href = '/register'}>
-                Register as Driver
-              </Button>
-            </CardContent>
-          </Card>
-        </main>
-      </div>
+      <AppShell className="items-center justify-center px-4 py-16">
+        <div className="w-full max-w-md">
+          <h1 className="text-3xl">Add your vehicle to start driving</h1>
+          <p className="mt-3 text-ink-muted">
+            Your account doesn’t have a driver profile yet. Register as a driver with your vehicle number so
+            passengers can recognise you.
+          </p>
+          <Link href="/register" className={cn(buttonVariants({ size: 'lg' }), 'mt-8')}>
+            Register as a driver
+          </Link>
+        </div>
+      </AppShell>
     );
   }
 
-  return (
-    <div className="min-h-screen flex flex-col bg-background">
-      <Navbar />
+  const next = activeRide ? NEXT_ACTION[activeRide.status] : undefined;
+  const isPending = actionMutation.isPending;
+  const rideStatus = activeRide
+    ? DRIVER_STATUS[activeRide.status] ?? { title: activeRide.status.replace(/_/g, ' ').toLowerCase(), detail: '' }
+    : null;
 
-      <main className="flex-1 container mx-auto px-4 py-8 max-w-5xl">
-        {/* Page header */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-foreground">Driver Dashboard</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {driverProfile?.vehicleNumber
-              ? `Vehicle: ${driverProfile.vehicleNumber}`
-              : 'Manage your rides and status'}
-          </p>
+  const sheet = (
+    <>
+      {socketError && (
+        <Notice icon={<WifiOff />} className="mb-5">
+          <p className="font-bold">Live updates paused</p>
+          <p>New requests may not appear until we reconnect. ({socketError})</p>
+        </Notice>
+      )}
+
+      {/* Availability. While a ride is active it collapses to a status strip. */}
+      {activeRide ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-rule bg-surface px-4 py-3 text-sm">
+          <LiveDot tone="success" />
+          <span className="font-bold">On a ride</span>
+          <span className="ml-auto flex items-center gap-2 text-ink-muted">
+            <Plate>{driverProfile.vehicleNumber}</Plate>
+          </span>
         </div>
-
-        {socketError && (
-          <div className="mb-4 flex items-center gap-2 bg-amber-50 text-amber-800 text-sm px-4 py-3 rounded-lg border border-amber-200">
-            <WifiOff className="h-4 w-4 shrink-0" />
-            <span>{socketError}</span>
-          </div>
-        )}
-
-        <div className="flex flex-col md:flex-row gap-6">
-          {/* Left column — controls */}
-          <div className="w-full md:w-72 shrink-0 space-y-4">
-            {/* Online/Offline toggle */}
-            <Card className="shadow-sm">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Status</CardTitle>
-                <CardDescription className="text-xs">
-                  {isOnline ? 'You are receiving ride requests' : 'Go online to receive rides'}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {/* Status indicator */}
-                <div className={cn(
-                  'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium',
-                  isOnline ? 'bg-emerald-50 text-emerald-700' : 'bg-muted text-muted-foreground'
-                )}>
-                  <div className={cn(
-                    'w-2 h-2 rounded-full',
-                    isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-muted-foreground'
-                  )} />
-                  {isOnline ? 'Online' : 'Offline'}
-                </div>
-
-                <Button
-                  size="sm"
-                  className="w-full gap-2"
-                  variant={isOnline ? 'destructive' : 'default'}
-                  onClick={() => toggleOnlineMutation.mutate(!isOnline)}
-                  disabled={toggleOnlineMutation.isPending || !!activeRide}
-                >
-                  {toggleOnlineMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Power className="h-4 w-4" />
-                  )}
-                  {isOnline ? 'Go Offline' : 'Go Online'}
-                </Button>
-
-                {error && (
-                  <div className="flex items-start gap-2 text-destructive text-xs bg-destructive/10 p-2 rounded">
-                    <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                    {error}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Today's summary */}
-            <Card className="shadow-sm">
-              <CardContent className="p-4">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-                  Today&apos;s Summary
-                </p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-muted/50 rounded-lg p-3">
-                    <p className="text-xs text-muted-foreground">Earnings</p>
-                    <p className="text-lg font-bold text-foreground mt-0.5">₹0.00</p>
-                  </div>
-                  <div className="bg-muted/50 rounded-lg p-3">
-                    <p className="text-xs text-muted-foreground">Rides</p>
-                    <p className="text-lg font-bold text-foreground mt-0.5">0</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Right column — ride + map */}
-          <div className="flex-1 space-y-4 min-w-0">
-            {isRideLoading ? (
-              <Card className="shadow-sm h-40 flex items-center justify-center">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </Card>
-            ) : !activeRide ? (
-              <Card className="shadow-sm">
-                <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                  <div className="bg-muted/50 p-4 rounded-full mb-4">
-                    <MapIcon className="h-8 w-8 text-muted-foreground" />
-                  </div>
-                  <h3 className="font-semibold text-foreground">No active ride</h3>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {isOnline ? 'Waiting for a ride request…' : 'Go online to start receiving rides'}
-                  </p>
-                </CardContent>
-              </Card>
-            ) : (
-              <Card className="shadow-sm overflow-hidden">
-                {/* Status banner */}
-                <div
-                  className={cn(
-                    'px-5 py-3 flex items-center justify-between',
-                    activeRide.status === 'ASSIGNED'
-                      ? 'bg-amber-100 text-amber-800'
-                      : 'bg-primary/10 text-primary'
-                  )}
-                >
-                  <span className="text-sm font-semibold">
-                    {STATUS_LABELS[activeRide.status] ?? activeRide.status.replace(/_/g, ' ')}
-                  </span>
-                  <span className="text-xs opacity-60 font-mono">
-                    #{activeRide.id.slice(-6).toUpperCase()}
-                  </span>
-                </div>
-
-                <CardContent className="p-5 space-y-5">
-                  {/* Passenger info */}
-                  <div className="flex items-center gap-3 bg-muted/50 rounded-xl p-4">
-                    <div className="h-11 w-11 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-base shrink-0">
-                      {(activeRide.passengerName ?? 'P').charAt(0).toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-foreground text-sm">
-                        {activeRide.passengerName || 'Passenger'}
-                      </p>
-                    </div>
-                    {activeRide.estimatedFare && (
-                      <div className="text-right shrink-0">
-                        <p className="text-xs text-muted-foreground">Est. Fare</p>
-                        <p className="font-bold text-base text-primary">₹{activeRide.estimatedFare}</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Route */}
-                  <div className="relative pl-5 space-y-5 border-l-2 border-border ml-2">
-                    <div className="relative">
-                      <div className="absolute -left-[23px] top-1 bg-background border-2 border-border w-5 h-5 rounded-full flex items-center justify-center">
-                        <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground" />
-                      </div>
-                      <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide mb-0.5">
-                        Pickup
-                      </p>
-                      <p className="font-medium text-foreground text-sm">{activeRide.pickup.address}</p>
-                    </div>
-
-                    <div className="relative">
-                      <div className="absolute -left-[23px] top-1 bg-background border-2 border-primary/40 w-5 h-5 rounded-full flex items-center justify-center">
-                        <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-                      </div>
-                      <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide mb-0.5">
-                        Destination
-                      </p>
-                      <p className="font-medium text-foreground text-sm">{activeRide.destination.address}</p>
-                    </div>
-                  </div>
-
-                  {/* Action buttons */}
-                  <div className="pt-3 border-t border-border">
-                    {renderRideActions()}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Map */}
-            <div className="h-64 md:h-72 bg-card rounded-xl shadow-sm overflow-hidden border border-border">
-              <Map
-                pickup={
-                  activeRide
-                    ? { lat: parseFloat(activeRide.pickup.lat), lng: parseFloat(activeRide.pickup.lng) }
-                    : undefined
-                }
-                destination={
-                  activeRide
-                    ? { lat: parseFloat(activeRide.destination.lat), lng: parseFloat(activeRide.destination.lng) }
-                    : undefined
-                }
-                className="h-full w-full"
-              />
+      ) : (
+        <section aria-labelledby="availability" className="rounded-xl border border-rule bg-surface p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 id="availability" className="flex items-center gap-2.5 text-xl">
+                <LiveDot tone={isOnline ? 'success' : 'idle'} />
+                {isOnline ? 'You’re online' : 'You’re offline'}
+              </h2>
+              <p className="mt-1 text-sm text-ink-muted">
+                {isOnline
+                  ? 'New ride requests near you will appear here.'
+                  : 'Go online when you’re ready to take rides.'}
+              </p>
             </div>
           </div>
-        </div>
-      </main>
+          <Button
+            size="lg"
+            variant={isOnline ? 'outline' : 'default'}
+            className="mt-4 w-full"
+            aria-pressed={isOnline}
+            onClick={() => toggleOnlineMutation.mutate(!isOnline)}
+            disabled={toggleOnlineMutation.isPending}
+          >
+            {toggleOnlineMutation.isPending ? <Loader2 className="animate-spin" /> : <Power />}
+            {isOnline ? 'Go offline' : 'Go online'}
+          </Button>
+  
+          <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-rule pt-4 text-sm text-ink-muted">
+            <Plate>{driverProfile.vehicleNumber}</Plate>
+            {driverProfile.vehicleModel && <span>{driverProfile.vehicleModel}</span>}
+            {driverProfile.rating && (
+              <span className="ml-auto inline-flex items-center gap-1">
+                <Star aria-hidden className="size-3.5 fill-signal text-signal-edge" />
+                <span className="tnum font-bold text-ink">{Number(driverProfile.rating).toFixed(1)}</span>
+                <span className="sr-only">rating</span>
+              </span>
+            )}
+          </div>
+        </section>
+      )}
+
+      {error && (
+        <Notice tone="danger" icon={<CircleAlert />} className="mt-4">
+          {error}
+        </Notice>
+      )}
+
+      {/* Current ride */}
+      <section aria-label="Current ride" className="mt-8">
+        {isRideLoading ? (
+          <div className="space-y-4" aria-busy="true">
+            <Skeleton className="h-8 w-56" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-24 w-full" />
+          </div>
+        ) : !activeRide ? (
+          <div className="py-6">
+            <h2 className="flex items-center gap-2.5 text-2xl">
+              {isOnline && <LiveDot />}
+              {isOnline ? 'Waiting for a request' : 'No ride right now'}
+            </h2>
+            <p className="mt-2 text-ink-muted">
+              {isOnline
+                ? 'Keep this screen open. You’ll see the pickup and destination before you accept.'
+                : 'Rides are only offered while you’re online.'}
+            </p>
+          </div>
+        ) : (
+          <>
+            <p className="text-sm text-ink-muted">
+              Ride <span className="tnum font-bold text-ink">{shortRideId(activeRide.id)}</span>
+            </p>
+            <div aria-live="polite">
+              <h2 className="mt-1 text-3xl first-letter:uppercase">{rideStatus!.title}</h2>
+              {rideStatus!.detail && <p className="mt-1.5 text-ink-muted">{rideStatus!.detail}</p>}
+            </div>
+
+            <RideProgress status={activeRide.status} className="mt-6" />
+
+            <div className="mt-8 flex items-center gap-3 rounded-xl border border-rule bg-surface p-4">
+              <span className="grid size-12 shrink-0 place-items-center rounded-full bg-ink font-display text-lg font-extrabold text-paper">
+                {(activeRide.passengerName ?? 'P').charAt(0).toUpperCase()}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-bold">{activeRide.passengerName || 'Passenger'}</p>
+                <p className="text-sm text-ink-muted">Passenger</p>
+              </div>
+              {activeRide.estimatedFare && (
+                <div className="text-right">
+                  <p className="text-sm text-ink-muted">Est. fare</p>
+                  <p className="tnum font-display text-xl font-extrabold">₹{activeRide.estimatedFare}</p>
+                </div>
+              )}
+            </div>
+
+            <RouteStops
+              className="mt-8"
+              from={<StopText label="Pickup" name={activeRide.pickup.address} />}
+              to={<StopText label="Destination" name={activeRide.destination.address} />}
+            />
+
+            {/* Thumb-zone action: sticks to the bottom of the screen on mobile */}
+            {next && (
+              <div className="sticky bottom-0 z-20 -mx-4 mt-8 border-t border-rule bg-paper px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:-mx-6 sm:px-6 lg:static lg:mx-0 lg:border-0 lg:p-0">
+                <div className="flex gap-3">
+                  <Button
+                    size="xl"
+                    className="flex-1"
+                    onClick={() => actionMutation.mutate({ action: next.action, rideId: activeRide.id })}
+                    disabled={isPending}
+                  >
+                    {isPending && <Loader2 className="size-5 animate-spin" />}
+                    {next.label}
+                  </Button>
+                  {activeRide.status === 'ASSIGNED' && (
+                    <ConfirmDialog
+                      title="Decline this ride?"
+                      description="We’ll offer it to another driver."
+                      confirmLabel="Decline ride"
+                      cancelLabel="Go back"
+                      onConfirm={() => actionMutation.mutate({ action: 'cancel-driver', rideId: activeRide.id })}
+                      trigger={
+                        <Button variant="outline" size="xl" disabled={isPending}>
+                          Decline
+                        </Button>
+                      }
+                    />
+                  )}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </section>
+    </>
+  );
+
+  return (
+    <AppShell>
+      <MapLayout
+        hideMapOnMobile={!activeRide}
+        map={
+          <Map
+            className="size-full"
+            pickup={
+              activeRide
+                ? {
+                    lat: parseFloat(activeRide.pickup.lat),
+                    lng: parseFloat(activeRide.pickup.lng),
+                    label: activeRide.pickup.address || 'Pickup',
+                  }
+                : undefined
+            }
+            destination={
+              activeRide
+                ? {
+                    lat: parseFloat(activeRide.destination.lat),
+                    lng: parseFloat(activeRide.destination.lng),
+                    label: activeRide.destination.address || 'Destination',
+                  }
+                : undefined
+            }
+          />
+        }
+        sheet={sheet}
+      />
+    </AppShell>
+  );
+}
+
+function DriverSkeleton() {
+  return (
+    <div aria-busy="true" aria-label="Loading driver dashboard">
+      <Skeleton className="h-44 w-full rounded-xl" />
+      <Skeleton className="mt-8 h-8 w-56" />
+      <Skeleton className="mt-3 h-4 w-72 max-w-full" />
     </div>
   );
 }

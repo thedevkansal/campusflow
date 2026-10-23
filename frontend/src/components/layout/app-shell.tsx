@@ -24,10 +24,24 @@ export function AppShell({ children, className }: { children: React.ReactNode; c
  * Map-first layout: a sheet of controls beside a full-height map on desktop;
  * map on top, sheet below on small screens.
  */
-export function MapLayout({ sheet, map }: { sheet: React.ReactNode; map: React.ReactNode }) {
+export function MapLayout({
+  sheet,
+  map,
+  hideMapOnMobile = false,
+}: {
+  sheet: React.ReactNode;
+  map: React.ReactNode;
+  /** Skip the map on small screens when it carries no information yet. */
+  hideMapOnMobile?: boolean;
+}) {
   return (
     <div className="flex flex-1 flex-col lg:grid lg:grid-cols-[minmax(380px,460px)_1fr]">
-      <div className="relative h-[36vh] min-h-56 border-b border-rule lg:sticky lg:top-14 lg:order-2 lg:h-[calc(100dvh-3.5rem)] lg:border-b-0">
+      <div
+        className={cn(
+          'relative h-[36vh] min-h-56 border-b border-rule lg:sticky lg:top-14 lg:order-2 lg:block lg:h-[calc(100dvh-3.5rem)] lg:border-b-0',
+          hideMapOnMobile && 'hidden'
+        )}
+      >
         {map}
       </div>
       <div className="bg-paper lg:order-1 lg:border-r lg:border-rule">
