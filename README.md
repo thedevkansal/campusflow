@@ -10,7 +10,7 @@ Real-time ride-sharing for campuses: passengers request rides, nearby drivers ge
 <!-- TODO: add a license badge once a LICENSE file exists (see License section). -->
 <!-- TODO: add a CI/build badge once a CI workflow exists. -->
 
-**[Live demo](https://campusflow-six-chi.vercel.app)** · **[API health](https://campusflow-y2g2.onrender.com/health)**
+**[Live demo](https://campusflow-go.vercel.app)** · **[API health](https://campusflow-y2g2.onrender.com/health)**
 
 ---
 
@@ -30,7 +30,7 @@ Getting around a large campus often means waiting for a shuttle or messaging aro
 
 <!-- TODO: add a short GIF of a full ride (request → match → accept → complete). -->
 
-- Frontend: https://campusflow-six-chi.vercel.app
+- Frontend: https://campusflow-go.vercel.app
 - Backend: https://campusflow-y2g2.onrender.com/api/v1
 
 > The backend runs on Render's free plan and sleeps after 15 minutes idle. The first request can take about a minute.
