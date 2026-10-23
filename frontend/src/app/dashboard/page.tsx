@@ -14,18 +14,8 @@ import { Map } from '@/components/map';
 import { api, getErrorMessage } from '@/lib/api';
 import { useSocket } from '@/context/socket-context';
 import { useRequireAuth } from '@/hooks/use-require-auth';
+import { CAMPUS_PLACES } from '@/lib/campus';
 import { ENDED_STATUSES, PASSENGER_STATUS, shortRideId } from '@/lib/ride-status';
-
-// Campus pickup / drop-off points. Ride requests send these real coordinates so
-// matching, fare estimates and the map all reflect the chosen route.
-const CAMPUS_PLACES = [
-  { id: 'main-gate', name: 'Main Gate', lat: 12.9716, lng: 77.5946 },
-  { id: 'library', name: 'Library', lat: 12.978, lng: 77.598 },
-  { id: 'academic-block', name: 'Academic Block', lat: 12.9748, lng: 77.5962 },
-  { id: 'hostels', name: 'Hostels', lat: 12.9695, lng: 77.5992 },
-  { id: 'sports-complex', name: 'Sports Complex', lat: 12.9762, lng: 77.5918 },
-  { id: 'cafeteria', name: 'Cafeteria', lat: 12.9731, lng: 77.5975 },
-] as const;
 
 // Matches PASSENGER_CANCELLABLE_STATUSES in backend rides.repository.ts
 // (docs/RIDE_STATE_MACHINE.md: passengers cannot cancel once the driver is ARRIVING)
