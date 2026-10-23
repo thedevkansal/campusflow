@@ -71,7 +71,16 @@ export function StopText({ label, name }: { label: string; name: React.ReactNode
  * The ride lifecycle as a transit line. Completed segments fill with the signal
  * colour; the fill animates when the status advances.
  */
-export function RideProgress({ status, className }: { status: string; className?: string }) {
+export function RideProgress({
+  status,
+  className,
+  drawOnMount = false,
+}: {
+  status: string;
+  className?: string;
+  /** Draw the completed segment once on first paint (landing hero). */
+  drawOnMount?: boolean;
+}) {
   const current = stopIndex(status);
   const last = RIDE_STOPS.length - 1;
   const pct = current <= 0 ? 0 : (current / last) * 100;
@@ -82,7 +91,10 @@ export function RideProgress({ status, className }: { status: string; className?
         <span aria-hidden className="absolute inset-x-0 top-1/2 h-[3px] -translate-y-1/2 rounded-full bg-rule" />
         <span
           aria-hidden
-          className="absolute top-1/2 left-0 h-[3px] -translate-y-1/2 rounded-full bg-ink transition-[width] duration-[320ms] ease-out"
+          className={cn(
+            'absolute top-1/2 left-0 h-[3px] origin-left -translate-y-1/2 rounded-full bg-ink transition-[width] duration-[320ms] ease-out',
+            drawOnMount && 'animate-grow'
+          )}
           style={{ width: `${pct}%` }}
         />
         {RIDE_STOPS.map((stop, i) => {

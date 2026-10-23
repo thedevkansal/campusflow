@@ -155,16 +155,16 @@
   --ease-in: cubic-bezier(0.4, 0, 1, 1);
 
   --animate-live: live 2.4s var(--ease-out) infinite;
-  --animate-draw: draw 320ms var(--ease-out) both;
   --animate-shimmer: shimmer 1.6s linear infinite;
+  --animate-grow: grow 900ms var(--ease-out) 250ms both;
 
   @keyframes live {
     0% { box-shadow: 0 0 0 0 color-mix(in oklab, currentColor 55%, transparent); }
     70%, 100% { box-shadow: 0 0 0 7px transparent; }
   }
-  @keyframes draw {
-    from { transform: scaleY(0); }
-    to { transform: scaleY(1); }
+  @keyframes grow {
+    from { transform: translateY(-50%) scaleX(0); }
+    to { transform: translateY(-50%) scaleX(1); }
   }
   @keyframes shimmer {
     from { background-position: 200% 0; }
