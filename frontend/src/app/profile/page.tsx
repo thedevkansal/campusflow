@@ -3,34 +3,18 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  User,
-  Mail,
-  Shield,
-  Star,
-  Car,
-  LogOut,
-  Edit2,
-  Check,
-  X,
-  Loader2,
-  Hash,
-  Calendar,
-  TrendingUp,
-  AlertCircle,
-} from 'lucide-react';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { CircleAlert, Loader2, LogOut, Pencil, Star } from 'lucide-react';
+import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
-import { Navbar } from '@/components/layout/navbar';
+import { Input } from '@/components/ui/input';
+import { Field } from '@/components/ui/label';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/components/ui/toast';
+import { AppShell, Notice } from '@/components/layout/app-shell';
+import { Plate } from '@/components/ride/route-line';
 import { api } from '@/lib/api';
 import { useAuth } from '@/context/auth-context';
 import { cn } from '@/lib/utils';
-import { formatDistanceToNow } from 'date-fns';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -63,48 +47,14 @@ interface EditDriverForm {
   vehicleColor: string;
 }
 
-// ─── Stat Card ────────────────────────────────────────────────────────────────
-
-function StatCard({
-  icon: Icon,
-  label,
-  value,
-  color = 'primary',
-}: {
-  icon: React.ElementType;
-  label: string;
-  value: string | number | undefined;
-  color?: 'primary' | 'amber' | 'emerald';
-}) {
-  return (
-    <div className="bg-muted/40 rounded-xl p-4 flex items-center gap-4">
-      <div
-        className={cn(
-          'p-2.5 rounded-lg',
-          color === 'amber'
-            ? 'bg-amber-100 text-amber-600'
-            : color === 'emerald'
-            ? 'bg-emerald-100 text-emerald-600'
-            : 'bg-primary/10 text-primary'
-        )}
-      >
-        <Icon className="h-5 w-5" />
-      </div>
-      <div>
-        <p className="text-xs text-muted-foreground font-medium">{label}</p>
-        <p className="text-lg font-bold text-foreground leading-tight">
-          {value ?? '—'}
-        </p>
-      </div>
-    </div>
-  );
-}
+const ROLE_LABEL = { PASSENGER: 'Passenger', DRIVER: 'Driver', ADMIN: 'Admin' } as const;
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ProfilePage() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const toast = useToast();
   const { logout, role, isAuthenticated, isLoading: authLoading } = useAuth();
 
   const [isEditingVehicle, setIsEditingVehicle] = useState(false);
@@ -164,6 +114,7 @@ export default function ProfilePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profile:driver'] });
       setIsEditingVehicle(false);
+      toast.success('Vehicle details saved');
     },
   });
 
@@ -175,6 +126,7 @@ export default function ProfilePage() {
         vehicleColor: driverProfile.vehicleColor ?? '',
       });
     }
+    updateVehicleMutation.reset();
     setIsEditingVehicle(true);
   };
 
@@ -187,52 +139,44 @@ export default function ProfilePage() {
 
   if (authLoading || isProfileLoading) {
     return (
-      <div className="min-h-screen flex flex-col bg-background">
-        <Navbar />
-        <main className="flex-1 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-4 text-muted-foreground">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="text-sm">Loading profile…</p>
+      <AppShell>
+        <div className="mx-auto w-full max-w-2xl px-4 py-12 sm:px-6" aria-busy="true" aria-label="Loading profile">
+          <div className="flex items-center gap-4">
+            <Skeleton className="size-16 rounded-full" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-8 w-48" />
+              <Skeleton className="h-4 w-64 max-w-full" />
+            </div>
           </div>
-        </main>
-      </div>
+          <Skeleton className="mt-10 h-24 w-full" />
+          <Skeleton className="mt-8 h-40 w-full" />
+        </div>
+      </AppShell>
     );
   }
 
   if (isProfileError || !profile) {
     return (
-      <div className="min-h-screen flex flex-col bg-background">
-        <Navbar />
-        <main className="flex-1 flex items-center justify-center px-4">
-          <Card className="w-full max-w-sm shadow-sm text-center">
-            <CardContent className="p-8 flex flex-col items-center gap-4">
-              <div className="bg-destructive/10 p-4 rounded-full">
-                <AlertCircle className="h-8 w-8 text-destructive" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold">Could not load profile</h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Please try refreshing the page.
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                onClick={() => queryClient.invalidateQueries({ queryKey: ['profile:auth'] })}
-              >
-                Retry
-              </Button>
-            </CardContent>
-          </Card>
-        </main>
-      </div>
+      <AppShell className="items-center justify-center px-4 py-16">
+        <div className="w-full max-w-sm text-center">
+          <CircleAlert aria-hidden className="mx-auto size-6 text-danger" />
+          <h1 className="mt-4 text-2xl">We couldn’t load your profile</h1>
+          <p className="mt-2 text-ink-muted">Check your connection and try again.</p>
+          <Button
+            variant="outline"
+            className="mt-6"
+            onClick={() => queryClient.invalidateQueries({ queryKey: ['profile:auth'] })}
+          >
+            Try again
+          </Button>
+        </div>
+      </AppShell>
     );
   }
 
   // ── Derived values ────────────────────────────────────────────────────────
 
-  const memberSince = profile.createdAt
-    ? formatDistanceToNow(new Date(profile.createdAt), { addSuffix: true })
-    : 'Unknown';
+  const memberSince = profile.createdAt ? format(new Date(profile.createdAt), 'MMMM yyyy') : null;
 
   const displayRating =
     role === 'DRIVER' && driverProfile
@@ -248,292 +192,197 @@ export default function ProfilePage() {
 
   const displayName =
     profile.name || profile.email?.split('@')[0] || 'User';
+  const initials = displayName
+    .split(/\s+/)
+    .map((p) => p[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+  const vehicleError = (updateVehicleMutation.error as any)?.response?.data?.message;
 
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
-      <Navbar />
-
-      <main className="flex-1 container mx-auto px-4 py-8 max-w-2xl">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-foreground">Profile</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Member {memberSince}
-          </p>
-        </div>
-
-        <div className="space-y-5">
-          {/* Avatar + name card */}
-          <Card className="shadow-sm overflow-hidden">
-            <div className="h-16 bg-gradient-to-r from-primary/20 via-primary/10 to-transparent" />
-            <CardContent className="px-6 pb-6 -mt-8">
-              <div className="flex items-end gap-4">
-                <div className="h-16 w-16 rounded-2xl bg-primary/10 border-4 border-background flex items-center justify-center text-primary font-bold text-xl shadow-sm shrink-0">
-                  {displayName.slice(0, 2).toUpperCase()}
-                </div>
-                <div className="pb-1 flex-1 min-w-0">
-                  <h2 className="text-lg font-bold text-foreground truncate">
-                    {displayName}
-                  </h2>
-                  <span
-                    className={cn(
-                      'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold',
-                      role === 'DRIVER'
-                        ? 'bg-amber-100 text-amber-700'
-                        : 'bg-primary/10 text-primary'
-                    )}
-                  >
-                    {role === 'DRIVER' ? 'Driver' : 'Passenger'}
-                  </span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Stats */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <StatCard
-              icon={Star}
-              label="Rating"
-              value={displayRating}
-              color="amber"
-            />
-            <StatCard
-              icon={TrendingUp}
-              label="Ratings received"
-              value={displayTotalRatings}
-              color="primary"
-            />
-            <StatCard
-              icon={Hash}
-              label="Total rides"
-              value={profile.totalRides ?? 0}
-              color="emerald"
-            />
-          </div>
-
-          {/* Account info */}
-          <Card className="shadow-sm">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Account Information</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <InfoRow icon={User} label="Full name" value={profile.name} />
-              <InfoRow icon={Mail} label="Email address" value={profile.email} />
-              <InfoRow
-                icon={Shield}
-                label="Role"
-                value={profile.role.charAt(0) + profile.role.slice(1).toLowerCase()}
-              />
-              <InfoRow icon={Calendar} label="Member since" value={memberSince} />
-            </CardContent>
-          </Card>
-
-          {/* Driver vehicle info */}
-          {role === 'DRIVER' && (
-            <Card className="shadow-sm">
-              <CardHeader className="pb-3 flex flex-row items-center justify-between">
-                <CardTitle className="text-base">Vehicle Information</CardTitle>
-                {!isEditingVehicle && driverProfile && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 px-3 gap-1.5"
-                    onClick={handleStartEdit}
-                  >
-                    <Edit2 className="h-3.5 w-3.5" />
-                    Edit
-                  </Button>
-                )}
-              </CardHeader>
-              <CardContent>
-                {isDriverLoading ? (
-                  <div className="flex justify-center py-4">
-                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                  </div>
-                ) : !driverProfile ? (
-                  <p className="text-sm text-muted-foreground">
-                    Driver profile not found.
-                  </p>
-                ) : isEditingVehicle ? (
-                  <VehicleEditForm
-                    form={vehicleForm}
-                    onChange={setVehicleForm}
-                    onSave={() =>
-                      updateVehicleMutation.mutate({
-                        vehicleNumber: vehicleForm.vehicleNumber || undefined,
-                        vehicleModel: vehicleForm.vehicleModel || undefined,
-                        vehicleColor: vehicleForm.vehicleColor || undefined,
-                      })
-                    }
-                    onCancel={() => setIsEditingVehicle(false)}
-                    isPending={updateVehicleMutation.isPending}
-                    error={
-                      (updateVehicleMutation.error as any)?.response?.data
-                        ?.message
-                    }
-                  />
-                ) : (
-                  <div className="space-y-4">
-                    <InfoRow
-                      icon={Car}
-                      label="Vehicle number"
-                      value={driverProfile.vehicleNumber}
-                    />
-                    {driverProfile.vehicleModel && (
-                      <InfoRow
-                        icon={Car}
-                        label="Model"
-                        value={driverProfile.vehicleModel}
-                      />
-                    )}
-                    {driverProfile.vehicleColor && (
-                      <InfoRow
-                        icon={Car}
-                        label="Colour"
-                        value={driverProfile.vehicleColor}
-                      />
-                    )}
-                    <div className="flex gap-2 pt-1">
-                      <span
-                        className={cn(
-                          'px-2.5 py-1 rounded-full text-xs font-semibold',
-                          driverProfile.isVerified
-                            ? 'bg-emerald-100 text-emerald-700'
-                            : 'bg-amber-100 text-amber-700'
-                        )}
-                      >
-                        {driverProfile.isVerified ? 'Verified' : 'Unverified'}
-                      </span>
-                      <span
-                        className={cn(
-                          'px-2.5 py-1 rounded-full text-xs font-semibold',
-                          driverProfile.status === 'ONLINE'
-                            ? 'bg-emerald-100 text-emerald-700'
-                            : 'bg-muted text-muted-foreground'
-                        )}
-                      >
-                        {driverProfile.status}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {role === 'PASSENGER' && (
-            <p className="text-xs text-muted-foreground text-center px-4">
-              Name and email editing requires{' '}
-              <code className="font-mono">PATCH /auth/profile</code> — not yet
-              implemented on the backend.
+    <AppShell>
+      <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
+        {/* Identity */}
+        <header className="flex items-center gap-4 sm:gap-5">
+          <span className="grid size-16 shrink-0 place-items-center rounded-full bg-ink font-display text-2xl font-extrabold text-paper">
+            {initials}
+          </span>
+          <div className="min-w-0">
+            <h1 className="truncate text-3xl sm:text-4xl">{displayName}</h1>
+            <p className="mt-1 text-ink-muted">
+              {ROLE_LABEL[profile.role]}
+              {memberSince && <>, joined {memberSince}</>}
             </p>
-          )}
+          </div>
+        </header>
 
-          {/* Logout */}
-          <Card className="shadow-sm border-destructive/20">
-            <CardContent className="p-4">
-              <Button
-                variant="destructive"
-                className="w-full gap-2"
-                onClick={handleLogout}
-              >
-                <LogOut className="h-4 w-4" />
-                Log out
-              </Button>
-            </CardContent>
-          </Card>
+        {/* Stats: plain numbers on a rule, not tiles */}
+        <dl className="mt-10 grid grid-cols-2 border-y border-rule">
+          <div className="py-5 pr-4">
+            <dt className="text-sm text-ink-muted">Rating</dt>
+            <dd className="mt-1 flex items-baseline gap-2">
+              <span className="tnum font-display text-3xl font-extrabold">{displayRating}</span>
+              <Star aria-hidden className="size-4 translate-y-[-2px] fill-signal text-signal-edge" />
+              <span className="text-sm text-ink-muted">
+                from {displayTotalRatings} {displayTotalRatings === 1 ? 'rating' : 'ratings'}
+              </span>
+            </dd>
+          </div>
+          <div className="border-l border-rule py-5 pl-4 sm:pl-6">
+            <dt className="text-sm text-ink-muted">Rides</dt>
+            <dd className="tnum mt-1 font-display text-3xl font-extrabold">{profile.totalRides ?? 0}</dd>
+          </div>
+        </dl>
+
+        {/* Account */}
+        <section aria-labelledby="account" className="mt-10">
+          <h2 id="account" className="text-xl">Account</h2>
+          <dl className="mt-4 divide-y divide-rule rounded-xl border border-rule bg-surface">
+            <InfoRow label="Name" value={profile.name} />
+            <InfoRow label="Email" value={profile.email} />
+            <InfoRow label="Account type" value={ROLE_LABEL[profile.role]} />
+          </dl>
+        </section>
+
+        {/* Vehicle */}
+        {role === 'DRIVER' && (
+          <section aria-labelledby="vehicle" className="mt-10">
+            <div className="flex items-center justify-between gap-4">
+              <h2 id="vehicle" className="text-xl">Vehicle</h2>
+              {!isEditingVehicle && driverProfile && (
+                <Button variant="ghost" size="sm" onClick={handleStartEdit}>
+                  <Pencil />
+                  Edit
+                </Button>
+              )}
+            </div>
+
+            <div className="mt-4 rounded-xl border border-rule bg-surface p-5">
+              {isDriverLoading ? (
+                <div className="space-y-3" aria-busy="true">
+                  <Skeleton className="h-8 w-40" />
+                  <Skeleton className="h-4 w-56" />
+                </div>
+              ) : !driverProfile ? (
+                <p className="text-ink-muted">No vehicle on file yet.</p>
+              ) : isEditingVehicle ? (
+                <form
+                  className="space-y-5"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    updateVehicleMutation.mutate({
+                      vehicleNumber: vehicleForm.vehicleNumber || undefined,
+                      vehicleModel: vehicleForm.vehicleModel || undefined,
+                      vehicleColor: vehicleForm.vehicleColor || undefined,
+                    });
+                  }}
+                >
+                  {vehicleError && (
+                    <Notice tone="danger" icon={<CircleAlert />}>
+                      {Array.isArray(vehicleError) ? vehicleError.join(', ') : vehicleError}
+                    </Notice>
+                  )}
+                  <Field id="vehicleNumber" label="Vehicle number">
+                    <Input
+                      id="vehicleNumber"
+                      value={vehicleForm.vehicleNumber}
+                      onChange={(e) => setVehicleForm({ ...vehicleForm, vehicleNumber: e.target.value.toUpperCase() })}
+                      className="font-display font-bold tracking-[0.06em]"
+                    />
+                  </Field>
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <Field id="vehicleModel" label="Model" optional>
+                      <Input
+                        id="vehicleModel"
+                        value={vehicleForm.vehicleModel}
+                        placeholder="Honda Activa"
+                        onChange={(e) => setVehicleForm({ ...vehicleForm, vehicleModel: e.target.value })}
+                      />
+                    </Field>
+                    <Field id="vehicleColor" label="Colour" optional>
+                      <Input
+                        id="vehicleColor"
+                        value={vehicleForm.vehicleColor}
+                        placeholder="Grey"
+                        onChange={(e) => setVehicleForm({ ...vehicleForm, vehicleColor: e.target.value })}
+                      />
+                    </Field>
+                  </div>
+                  <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setIsEditingVehicle(false)}
+                      disabled={updateVehicleMutation.isPending}
+                    >
+                      Cancel
+                    </Button>
+                    <Button type="submit" disabled={updateVehicleMutation.isPending}>
+                      {updateVehicleMutation.isPending && <Loader2 className="animate-spin" />}
+                      Save vehicle
+                    </Button>
+                  </div>
+                </form>
+              ) : (
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+                  <Plate className="text-lg">{driverProfile.vehicleNumber}</Plate>
+                  <p className="text-ink-muted">
+                    {[driverProfile.vehicleColor, driverProfile.vehicleModel].filter(Boolean).join(' ') ||
+                      'Add your model and colour so passengers can spot you.'}
+                  </p>
+                  <div className="flex w-full flex-wrap gap-2 border-t border-rule pt-4">
+                    <StatusPill tone={driverProfile.isVerified ? 'success' : 'caution'}>
+                      {driverProfile.isVerified ? 'Verified' : 'Not verified yet'}
+                    </StatusPill>
+                    <StatusPill tone={driverProfile.status === 'ONLINE' ? 'success' : 'neutral'}>
+                      {driverProfile.status === 'ONLINE'
+                        ? 'Online'
+                        : driverProfile.status.charAt(0) + driverProfile.status.slice(1).toLowerCase().replace(/_/g, ' ')}
+                    </StatusPill>
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        <div className="mt-12 border-t border-rule pt-6">
+          <Button variant="destructive" onClick={handleLogout}>
+            <LogOut />
+            Log out
+          </Button>
         </div>
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function InfoRow({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: React.ElementType;
-  label: string;
-  value: string | undefined;
-}) {
+function InfoRow({ label, value }: { label: string; value: string | undefined }) {
   return (
-    <div className="flex items-center gap-3">
-      <div className="p-2 bg-muted rounded-lg shrink-0">
-        <Icon className="h-4 w-4 text-muted-foreground" />
-      </div>
-      <div>
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="text-sm font-medium text-foreground">{value ?? '—'}</p>
-      </div>
+    <div className="grid gap-1 px-5 py-4 sm:grid-cols-[10rem_1fr] sm:gap-4">
+      <dt className="text-sm text-ink-muted">{label}</dt>
+      <dd className="min-w-0 truncate font-bold">{value ?? '—'}</dd>
     </div>
   );
 }
 
-function VehicleEditForm({
-  form,
-  onChange,
-  onSave,
-  onCancel,
-  isPending,
-  error,
-}: {
-  form: EditDriverForm;
-  onChange: (f: EditDriverForm) => void;
-  onSave: () => void;
-  onCancel: () => void;
-  isPending: boolean;
-  error?: string;
-}) {
+function StatusPill({ tone, children }: { tone: 'success' | 'caution' | 'neutral'; children: React.ReactNode }) {
   return (
-    <div className="space-y-3">
-      {(['vehicleNumber', 'vehicleModel', 'vehicleColor'] as const).map(
-        (field) => (
-          <div key={field}>
-            <label className="text-xs text-muted-foreground font-medium mb-1.5 block capitalize">
-              {field.replace('vehicle', 'Vehicle ').trim()}
-            </label>
-            <input
-              className="w-full h-9 rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              value={form[field]}
-              onChange={(e) => onChange({ ...form, [field]: e.target.value })}
-            />
-          </div>
-        )
+    <span
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-bold',
+        tone === 'success' && 'bg-success-tint text-success',
+        tone === 'caution' && 'bg-signal-tint text-caution-ink',
+        tone === 'neutral' && 'bg-sunken text-ink-muted'
       )}
-      <div className="flex gap-2 pt-1">
-        <Button
-          size="sm"
-          className="flex-1 gap-1.5"
-          onClick={onSave}
-          disabled={isPending}
-        >
-          {isPending ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Check className="h-3.5 w-3.5" />
-          )}
-          Save
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="flex-1 gap-1.5"
-          onClick={onCancel}
-          disabled={isPending}
-        >
-          <X className="h-3.5 w-3.5" />
-          Cancel
-        </Button>
-      </div>
-      {error && (
-        <p className="text-xs text-destructive">{error}</p>
-      )}
-    </div>
+    >
+      <span aria-hidden className="size-1.5 rounded-full bg-current" />
+      {children}
+    </span>
   );
 }

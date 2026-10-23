@@ -62,9 +62,8 @@ export default function DashboardPage() {
     staleTime: 0,
   });
 
-  useEffect(() => {
-    if (activeRide?.id) setLastRideId(activeRide.id);
-  }, [activeRide?.id]);
+  // Remember the active ride's id (render-time update, no effect needed).
+  if (activeRide?.id && activeRide.id !== lastRideId) setLastRideId(activeRide.id);
 
   // Attach event listeners to the shared socket from SocketProvider.
   // We do NOT connect/disconnect here — that is managed by SocketProvider
