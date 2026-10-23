@@ -202,10 +202,12 @@ Passenger (≥1024px)                    Passenger (<768px)
 
 ## 4. Outcome
 
-Screenshots are in [`assets/redesign/`](assets/redesign/). They were captured
-headless at 390×844 (mobile, @2x) and 1440×900 (desktop) against a local backend
-with test accounts; `-dark` files use the OS dark scheme. The "before" shots are
-the existing `assets/*.png`.
+Screenshots are in [`assets/redesign/`](assets/redesign/): landing, login and
+register, captured headless at 390×844 (mobile, @2x) and 1440×900 (desktop).
+`-dark` files use the OS dark scheme. The "before" shots are the existing
+`assets/*.png`. The signed-in screens (Ride, Drive, Notifications, Profile) were
+reviewed live against a local backend during the redesign. Committed captures of
+them are still to do, because they need the local Postgres/Redis stack running.
 
 ### What changed, screen by screen
 
