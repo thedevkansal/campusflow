@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
 import { AuthProvider } from '@/context/auth-context';
 import { SocketProvider } from '@/context/socket-context';
+import { ToastProvider } from '@/components/ui/toast';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient({
@@ -24,7 +25,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <AuthProvider>
       <QueryClientProvider client={queryClient}>
         <SocketProvider>
-          {children}
+          <ToastProvider>{children}</ToastProvider>
         </SocketProvider>
       </QueryClientProvider>
     </AuthProvider>
