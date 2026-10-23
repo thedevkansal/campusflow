@@ -80,9 +80,9 @@ Accessibility
 
 | Reference | What's worth borrowing |
 |---|---|
-| [Citymapper](https://citymapper.com) | **The product is the hero.** The first thing on the page is a "Start / End" stacked input pair with a swap control, not a pitch. CampusFlow's landing leads with the actual route picker, using real campus stops. |
+| [Citymapper](https://citymapper.com) | **The product is the hero.** The first thing on the page is a "Start / End" stacked input pair with a swap control, not a pitch. CampusFlow's landing leads with the real ride sheet, and the passenger home *is* a stacked From/To picker with a swap button. |
 | [Transit](https://transitapp.com) | **Line colour as wayfinding.** Routes are thick coloured strokes with station dots, so one glance says where you are on a line. CampusFlow draws the ride lifecycle as a transit line with stops. |
-| [Cal.com](https://cal.com) | **Asymmetric split hero:** a left-aligned, heavy headline beside the live booking widget, plus segmented duration chips (15m / 30m / 45m). Borrowed for campus-stop chips and the landing split. |
+| [Cal.com](https://cal.com) | **Asymmetric split hero:** a left-aligned, heavy headline beside the live booking widget, so the product explains itself before any copy does. Borrowed for the landing split (headline left, live ride sheet right). |
 | [Uber Base design system](https://base.uber.com/6d2425e9f/p/294ab4-base-design-system) | **Black-and-white restraint, with line geometry as the only illustration.** No mascots, gradients or blobs. Network lines and nodes carry the visual identity. |
 | [Linear](https://linear.app/now) | **Achromatic UI with colour reserved for meaning.** The accent appears only on the primary action and active state. Filters are plain text tabs, and the type is small and dense. |
 | [Mercury](https://mercury.com) | **The action lives in the hero** (an inline input plus CTA), so nothing extra stands between landing and starting. The colour palette is very restrained. |
@@ -202,4 +202,62 @@ Passenger (≥1024px)                    Passenger (<768px)
 
 ## 4. Outcome
 
-See §5 (filled in after implementation).
+Screenshots are in [`assets/redesign/`](assets/redesign/). They were captured
+headless at 390×844 (mobile, @2x) and 1440×900 (desktop) against a local backend
+with test accounts; `-dark` files use the OS dark scheme. The "before" shots are
+the existing `assets/*.png`.
+
+### What changed, screen by screen
+
+| Screen | Before | After |
+|---|---|---|
+| **Ride (passenger home)** | A "Dashboard" card with two selects beside a decorative map; status shown in five unrelated Tailwind hues; ⭐ emoji; instant cancel. | Map-first layout (sheet beside a full-height map; map on top on mobile). The From/To picker is drawn on the route line with a swap button, and the map previews the chosen route before you book. The active ride shows a status headline, the lifecycle as a transit line, a driver card with **number plate**, fare/distance as plain figures, and **confirm-before-cancel**. It also explains why cancel isn't available instead of showing a dead "Cannot Cancel" button. New: if a ride ends while you watch (no driver found, driver cancelled, completed) you get a notice saying what happened, instead of silently dropping back to the form. |
+| **Drive** | Fixed-width sidebar with fake "Today's summary" (₹0.00 / 0), with the lifecycle button below the map on mobile. | An availability card (live dot, one toggle, real plate/model/rating) that collapses to an "On a ride" strip during a ride. One primary next-step button per status, **pinned to the bottom of the screen on mobile** (thumb zone). Decline asks for confirmation, and every step confirms with a toast whose wording matches the button. The map is hidden on mobile until there's a route. Fixed: after a ride the card said "offline" while the backend had already set the driver back ONLINE. |
+| **Landing** | Centred headline with one coloured word, two buttons, three icon cards, dark footer. | Left-aligned display headline built from real stops ("Main Gate to Library, without the walk."), one primary CTA, and the actual ride sheet as the hero visual (its route line draws once on load). "How a ride runs" is one transit line, and Riding/Driving are plain definition lists. |
+| **Log in / Sign up** | Centred card on grey. | Split screen with an ink "stop board" listing the campus stops. Ride/Drive are accessible radio tiles (previously Tabs). Password has show/hide, fields have hints, and drivers see a **live number-plate preview** as they type. |
+| **Notifications** | Tinted cards, coloured icons, unnamed icon button. | Grouped Today/Earlier. Unread rows get a marigold bar and an ink icon. Each mark-read button has a name ("Mark "…" as read"). Loading uses a skeleton list, and the empty state links to the next action. |
+| **Profile** | Gradient banner, three icon stat tiles, developer note about `PATCH /auth/profile`. | Identity header, then rating and rides as figures on a rule, account details as a definition list, and the vehicle as a plate with status pills. The edit form has labelled fields and a save toast, and the error state has a retry button. The developer copy is removed. |
+| **Global** | Inter everywhere, indigo primary, near-invisible focus ring, no dark mode, no toasts or dialogs. | Overpass + Atkinson Hyperlegible Next, paper/ink/signal tokens with dark mode, one 2px focus ring, a skip link, a toast system, a confirm dialog, skeletons, `prefers-reduced-motion`, and muted map tiles with route-styled pins (no more external marker images from unpkg). |
+
+### Critique pass (against §3 and the anti-slop list)
+Fixed during review:
+- The plate squeezed the driver's name on mobile, so it moved to the vehicle line.
+- Lifecycle dots showed through the sticky driver action bar (z-index).
+- During a ride, the driver's availability card said "You're offline" (misleading),
+  so it now collapses to "On a ride".
+- The auth form was vertically centred on phones, leaving a large empty band, so it's
+  now top-aligned below `lg`.
+- The landing sequence line overshot its last stop, so it now uses per-stop connectors.
+- "Step 1…4" labels above the sequence were redundant chrome and were removed.
+- Removed backdrop blur on the header (rule: no random blur).
+- Role radios had no accessible name, so they now use `aria-labelledby`/`aria-describedby`.
+
+Checked and kept:
+- One accent only. Marigold appears on the primary action, the current stop, live
+  dots, unread markers and the destination. Status never uses hue alone.
+- No gradients, blobs, glass, emoji icons or icon-card grids. A single shadow is used
+  only for floating surfaces.
+- Copy is sentence case, verbs match their toasts, and there's no "seamless" or "reimagined".
+- No horizontal overflow at 360px, 390px or 1440px (checked with `scrollWidth`).
+
+### Verification
+- `next build`: passes. `tsc --noEmit`: clean.
+- `eslint`: 19 errors, all in logic carried over unchanged (`no-explicit-any` in
+  query/mutation handlers, plus the original `setState`-in-effect calls in
+  `auth-context`, `socket-context` and the driver online sync). None come from the new UI code.
+- The flows were exercised end to end against the real backend: register/login, request
+  ride → assigned → accepted → at pickup → in progress → completed (driver side
+  through the UI, live socket updates on the passenger side), no-driver-found,
+  going online and offline, and marking notifications read.
+
+### Follow-ups (not done here)
+- **Ride history / earnings.** The PRD lists them, and drivers have nothing to look
+  back on. This needs an API (`GET /rides?mine`), so it's out of scope for a UI-only pass.
+- **Passenger rating after a ride.** `ratings` endpoints exist, but there's no UI yet. The
+  completed-ride notice is the natural place for it.
+- **Live driver position on the driver's own map.** The driver map shows only the route.
+- **Profile editing for name and email** is waiting on `PATCH /auth/profile`.
+- **Fare estimate before booking.** It's only known after the ride is created. A
+  `POST /rides/estimate` would let the picker show it up front.
+- **Theme toggle.** Dark mode follows the OS. A manual override would need a stored preference.
+- Typing the `any`s in the data hooks would clear the remaining lint errors.

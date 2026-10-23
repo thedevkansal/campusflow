@@ -99,13 +99,19 @@ export default function LandingPage() {
           <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6">
             <h2 id="how" className="text-3xl sm:text-4xl">How a ride runs</h2>
             <ol className="relative mt-12 grid gap-10 md:grid-cols-4 md:gap-8">
-              <span aria-hidden className="absolute top-2 bottom-2 left-[7px] w-[3px] rounded-full bg-ink md:top-[7px] md:right-0 md:bottom-auto md:left-0 md:h-[3px] md:w-auto" />
               {STEPS.map((step, i) => (
                 <li key={step.title} className="relative pl-10 md:pt-10 md:pl-0">
+                  {/* Connector to the next stop, so the line ends at the last one */}
+                  {i < STEPS.length - 1 && (
+                    <span
+                      aria-hidden
+                      className="absolute top-2 -bottom-10 left-[7px] w-[3px] bg-ink md:top-[7px] md:-right-8 md:bottom-auto md:left-2 md:h-[3px] md:w-auto"
+                    />
+                  )}
                   <span
                     aria-hidden
                     className={cn(
-                      'absolute top-0 left-0 size-[17px]',
+                      'absolute top-0 left-0 z-10 size-[17px]',
                       i === STEPS.length - 1
                         ? 'rounded-[4px] bg-ink ring-[3px] ring-signal ring-inset'
                         : 'rounded-full border-[3px] border-ink bg-surface'

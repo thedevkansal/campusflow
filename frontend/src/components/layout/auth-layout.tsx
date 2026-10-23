@@ -58,7 +58,7 @@ export function AuthLayout({
             <Logo />
           </Link>
         </div>
-        <div className="flex flex-1 flex-col justify-center px-4 py-10 sm:px-10 lg:px-14">
+        <div className="flex flex-1 flex-col px-4 pt-8 pb-12 sm:px-10 sm:pt-16 lg:justify-center lg:px-14 lg:py-10">
           <div className="mx-auto w-full max-w-sm">
             <h1 className="text-3xl sm:text-4xl">{title}</h1>
             <p className="mt-2 text-ink-muted">{subtitle}</p>
