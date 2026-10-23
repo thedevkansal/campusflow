@@ -8,29 +8,46 @@ export function RouteStops({
   to,
   className,
   action,
+  variant = 'text',
 }: {
   from: React.ReactNode;
   to: React.ReactNode;
   className?: string;
   /** Optional control placed on the line between the stops (e.g. swap). */
   action?: React.ReactNode;
+  /** 'control' aligns the dots with labelled form controls instead of text. */
+  variant?: 'text' | 'control';
 }) {
+  const control = variant === 'control';
   return (
     <div className={cn('relative grid grid-cols-[1.25rem_1fr] gap-x-3', className)}>
       {/* The line */}
-      <span aria-hidden className="absolute top-[1.15rem] bottom-[1.15rem] left-[0.5625rem] w-[3px] rounded-full bg-ink" />
-      <StopDot kind="from" />
-      <div className="min-w-0 pb-4">{from}</div>
-      <StopDot kind="to" />
-      <div className="min-w-0">{to}</div>
-      {action && <div className="absolute top-1/2 right-0 -translate-y-1/2">{action}</div>}
+      <span
+        aria-hidden
+        className={cn(
+          'absolute left-[0.5625rem] w-[3px] rounded-full bg-ink',
+          control ? 'top-[2.85rem] bottom-[1.5rem]' : 'top-[1.15rem] bottom-[1.15rem]'
+        )}
+      />
+      <StopDot kind="from" control={control} />
+      <div className={cn('min-w-0 pb-4', action && 'pr-12')}>{from}</div>
+      <StopDot kind="to" control={control} />
+      <div className={cn('min-w-0', action && 'pr-12')}>{to}</div>
+      {action && (
+        <div className={cn('absolute right-0 -translate-y-1/2', control ? 'top-[calc(50%+0.7rem)]' : 'top-1/2')}>
+          {action}
+        </div>
+      )}
     </div>
   );
 }
 
-function StopDot({ kind }: { kind: 'from' | 'to' }) {
+function StopDot({ kind, control }: { kind: 'from' | 'to'; control?: boolean }) {
   return (
-    <span aria-hidden className="relative z-10 flex h-[2.3rem] items-center justify-center">
+    <span
+      aria-hidden
+      className={cn('relative z-10 flex h-[2.3rem] items-center justify-center self-start', control && 'mt-[1.7rem]')}
+    >
       {kind === 'from' ? (
         <span className="size-3.5 rounded-full border-[3px] border-ink bg-surface" />
       ) : (

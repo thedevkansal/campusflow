@@ -247,6 +247,42 @@
     border-color: var(--rule);
   }
 
+  /* Map pins share the route-line vocabulary: open stop, ringed destination, live driver. */
+  .cf-pin {
+    display: block;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+  }
+  .cf-pin-from {
+    border-radius: 999px;
+    border: 4px solid #17222f;
+    background: #ffffff;
+  }
+  .cf-pin-to {
+    border-radius: 4px;
+    background: #17222f;
+    box-shadow: inset 0 0 0 4px #ffc21a, 0 0 0 2px #ffffff;
+  }
+  .cf-pin-driver {
+    border-radius: 999px;
+    border: 3px solid #17222f;
+    background: #ffc21a;
+    color: #d9a000;
+    animation: var(--animate-live);
+  }
+  .map-muted .leaflet-tooltip {
+    border: 0;
+    border-radius: var(--radius-md);
+    background: var(--ink);
+    color: var(--paper);
+    font-weight: 700;
+    box-shadow: none;
+  }
+  .map-muted .leaflet-tooltip-top::before {
+    border-top-color: var(--ink);
+  }
+
   .skeleton {
     background: linear-gradient(90deg, var(--sunken) 25%, color-mix(in oklab, var(--sunken) 60%, var(--surface)) 50%, var(--sunken) 75%);
     background-size: 200% 100%;

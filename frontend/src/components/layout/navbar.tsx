@@ -2,155 +2,163 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import {
-  Car, Bell, LogOut, LayoutDashboard, Gauge, UserCircle,
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { useQuery } from '@tanstack/react-query';
+import { Bell, LogOut, UserRound } from 'lucide-react';
+import { buttonVariants } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Logo } from '@/components/brand/logo';
 import { useAuth } from '@/context/auth-context';
+import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
+
+interface NotificationLite {
+  isRead: boolean;
+}
 
 export function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, isAuthenticated, role, logout } = useAuth();
 
+  // Shares the notifications page's query, so the badge and list stay in sync.
+  const { data: notifications } = useQuery({
+    queryKey: ['notifications'],
+    queryFn: async () => {
+      const res = await api.get('/notifications');
+      return res.data.data;
+    },
+    enabled: isAuthenticated,
+  });
+  const unread = ((notifications?.data ?? []) as NotificationLite[]).filter((n) => !n.isRead).length;
+
   const handleLogout = () => {
     logout();
     router.push('/login');
   };
 
+  const home = role === 'DRIVER' ? '/driver' : '/dashboard';
   const navLinks = isAuthenticated
-    ? role === 'DRIVER'
-      ? [
-          { href: '/driver', label: 'Dashboard', icon: Gauge },
-          { href: '/notifications', label: 'Notifications', icon: Bell },
-        ]
-      : [
-          { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-          { href: '/notifications', label: 'Notifications', icon: Bell },
-        ]
+    ? [
+        { href: home, label: role === 'DRIVER' ? 'Drive' : 'Ride' },
+        { href: '/notifications', label: 'Notifications' },
+      ]
     : [];
 
-  // Derive display name — use real name, fallback to email username
   const displayName = user?.name || user?.email?.split('@')[0] || 'Me';
-  const initials = displayName.slice(0, 2).toUpperCase();
+  const initials = displayName
+    .split(/\s+/)
+    .map((p) => p[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-border/60 bg-background/80 backdrop-blur-md">
-      <div className="container mx-auto px-4 h-16 flex items-center justify-between max-w-7xl">
-        {/* Logo */}
+    <header className="sticky top-0 z-50 w-full border-b border-rule bg-paper">
+      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
         <div className="flex items-center gap-8">
           <Link
-            href={isAuthenticated ? (role === 'DRIVER' ? '/driver' : '/dashboard') : '/'}
-            className="flex items-center gap-2 font-bold text-lg text-primary shrink-0"
+            href={isAuthenticated ? home : '/'}
+            className="rounded-md text-ink"
+            aria-label="CampusFlow home"
           >
-            <div className="bg-primary/10 p-1.5 rounded-lg">
-              <Car className="h-5 w-5" />
-            </div>
-            <span className="hidden sm:block">CampusFlow</span>
+            <Logo />
           </Link>
 
-          {/* Top nav links */}
-          {isAuthenticated && navLinks.length > 0 && (
-            <nav className="hidden md:flex items-center gap-1">
-              {navLinks.map(({ href, label }) => (
-                <Link
-                  key={href}
-                  href={href}
-                  className={cn(
-                    'px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-                    pathname === href
-                      ? 'bg-primary/10 text-primary'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                  )}
-                >
-                  {label}
-                </Link>
-              ))}
+          {navLinks.length > 0 && (
+            <nav aria-label="Main" className="hidden items-center gap-1 md:flex">
+              {navLinks.map(({ href, label }) => {
+                const active = pathname === href;
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    aria-current={active ? 'page' : undefined}
+                    className={cn(
+                      'relative inline-flex h-14 items-center gap-2 px-3 text-sm font-bold transition-colors',
+                      active ? 'text-ink' : 'text-ink-muted hover:text-ink'
+                    )}
+                  >
+                    {label}
+                    {href === '/notifications' && unread > 0 && <CountBadge count={unread} />}
+                    {active && <span aria-hidden className="absolute inset-x-3 bottom-0 h-[3px] rounded-t-full bg-ink" />}
+                  </Link>
+                );
+              })}
             </nav>
           )}
         </div>
 
-        {/* Right side */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           {isAuthenticated && user ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                <div className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-full hover:bg-muted transition-colors cursor-pointer">
-                  <Avatar className="h-8 w-8">
-                    <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
-                      {initials}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="hidden sm:block text-sm font-medium text-foreground max-w-[120px] truncate">
-                    {displayName}
+            <>
+              <Link
+                href="/notifications"
+                className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'relative md:hidden')}
+                aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
+              >
+                <Bell className="size-5" />
+                {unread > 0 && (
+                  <span aria-hidden className="absolute top-2 right-2 size-2.5 rounded-full bg-signal ring-2 ring-paper" />
+                )}
+              </Link>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  aria-label={`Account menu for ${displayName}`}
+                  className="flex items-center gap-2 rounded-full py-1 pr-1 pl-1 transition-colors hover:bg-sunken sm:pr-3 data-[popup-open]:bg-sunken"
+                >
+                  <span className="grid size-8 place-items-center rounded-full bg-ink font-display text-xs font-extrabold text-paper">
+                    {initials}
                   </span>
-                </div>
-              </DropdownMenuTrigger>
+                  <span className="hidden max-w-[140px] truncate text-sm font-bold sm:block">{displayName}</span>
+                </DropdownMenuTrigger>
 
-              <DropdownMenuContent className="w-56" align="end">
-                {/* Plain div — DropdownMenuLabel requires a Menu.Group wrapper in Base UI */}
-                <div className="px-2 py-1.5">
-                  <p className="text-sm font-semibold leading-none truncate">{displayName}</p>
-                  <p className="text-xs leading-none text-muted-foreground truncate mt-0.5">{user.email}</p>
-                </div>
-
-                <DropdownMenuSeparator />
-
-                {/* Profile — uses router.push for reliable Next.js navigation */}
-                <DropdownMenuItem
-                  className="cursor-pointer"
-                  onClick={() => router.push('/profile')}
-                >
-                  <UserCircle className="mr-2 h-4 w-4" />
-                  <span>Profile</span>
-                </DropdownMenuItem>
-
-                {/* Role-specific nav links */}
-                {navLinks.map(({ href, label, icon: Icon }) => (
-                  <DropdownMenuItem
-                    key={href}
-                    className="cursor-pointer"
-                    onClick={() => router.push(href)}
-                  >
-                    <Icon className="mr-2 h-4 w-4" />
-                    <span>{label}</span>
+                <DropdownMenuContent className="w-60" align="end" sideOffset={8}>
+                  {/* Plain div — DropdownMenuLabel requires a Menu.Group wrapper in Base UI */}
+                  <div className="px-2.5 py-2">
+                    <p className="truncate text-sm font-bold">{displayName}</p>
+                    <p className="truncate text-xs text-ink-muted">{user.email}</p>
+                  </div>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/profile')}>
+                    <UserRound />
+                    Profile
                   </DropdownMenuItem>
-                ))}
-
-                <DropdownMenuSeparator />
-
-                <DropdownMenuItem
-                  variant="destructive"
-                  onClick={handleLogout}
-                  className="cursor-pointer"
-                >
-                  <LogOut className="mr-2 h-4 w-4" />
-                  <span>Log out</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  <DropdownMenuItem variant="destructive" className="cursor-pointer" onClick={handleLogout}>
+                    <LogOut />
+                    Log out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
           ) : (
-            <div className="flex items-center gap-2">
-              <Link href="/login">
-                <Button variant="ghost" size="sm">Log in</Button>
+            <>
+              <Link href="/login" className={buttonVariants({ variant: 'ghost' })}>
+                Log in
               </Link>
-              <Link href="/register">
-                <Button size="sm">Get Started</Button>
+              <Link href="/register" className={buttonVariants({ variant: 'ink' })}>
+                Sign up
               </Link>
-            </div>
+            </>
           )}
         </div>
       </div>
     </header>
+  );
+}
+
+function CountBadge({ count }: { count: number }) {
+  return (
+    <span className="tnum inline-grid h-5 min-w-5 place-items-center rounded-full bg-signal px-1.5 text-xs font-bold text-signal-ink">
+      <span className="sr-only">, </span>
+      {count > 9 ? '9+' : count}
+      <span className="sr-only"> unread</span>
+    </span>
   );
 }

@@ -2,32 +2,19 @@
 
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  MapPin,
-  Navigation,
-  Clock,
-  CreditCard,
-  Car,
-  AlertCircle,
-  Loader2,
-  Info,
-} from 'lucide-react';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  CardFooter,
-} from '@/components/ui/card';
+import { ArrowUpDown, CircleAlert, CircleCheck, Loader2, Star, WifiOff, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Navbar } from '@/components/layout/navbar';
+import { NativeSelect } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
+import { ConfirmDialog } from '@/components/ui/dialog';
+import { useToast } from '@/components/ui/toast';
+import { AppShell, MapLayout, Notice } from '@/components/layout/app-shell';
+import { RouteStops, StopText, RideProgress, LiveDot, Plate } from '@/components/ride/route-line';
 import { Map } from '@/components/map';
 import { api, getErrorMessage } from '@/lib/api';
 import { useSocket } from '@/context/socket-context';
 import { useRequireAuth } from '@/hooks/use-require-auth';
-import { cn } from '@/lib/utils';
+import { ENDED_STATUSES, PASSENGER_STATUS, shortRideId } from '@/lib/ride-status';
 
 // Campus pickup / drop-off points. Ride requests send these real coordinates so
 // matching, fare estimates and the map all reflect the chosen route.
@@ -43,42 +30,19 @@ const CAMPUS_PLACES = [
 // Matches PASSENGER_CANCELLABLE_STATUSES in backend rides.repository.ts
 // (docs/RIDE_STATE_MACHINE.md: passengers cannot cancel once the driver is ARRIVING)
 const PASSENGER_CANCELLABLE = ['REQUESTED', 'SEARCHING', 'ASSIGNED', 'ACCEPTED'];
-
-const STATUS_LABELS: Record<string, string> = {
-  REQUESTED: 'Finding your driver…',
-  SEARCHING: 'Finding your driver…',
-  ASSIGNED: 'Driver assigned',
-  ACCEPTED: 'Driver on the way',
-  ARRIVING: 'Driver arriving',
-  IN_PROGRESS: 'Ride in progress',
-  COMPLETED: 'Ride completed',
-  PASSENGER_CANCELLED: 'Cancelled',
-  DRIVER_CANCELLED: 'Cancelled by driver',
-  NO_DRIVER_FOUND: 'No driver found',
-  TIMED_OUT: 'Timed out',
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  REQUESTED: 'bg-amber-100 text-amber-800',
-  SEARCHING: 'bg-amber-100 text-amber-800',
-  ASSIGNED: 'bg-blue-100 text-blue-800',
-  ACCEPTED: 'bg-blue-100 text-blue-800',
-  ARRIVING: 'bg-indigo-100 text-indigo-800',
-  IN_PROGRESS: 'bg-primary/10 text-primary',
-  COMPLETED: 'bg-emerald-100 text-emerald-800',
-  PASSENGER_CANCELLED: 'bg-slate-100 text-slate-600',
-  DRIVER_CANCELLED: 'bg-slate-100 text-slate-600',
-  NO_DRIVER_FOUND: 'bg-red-100 text-red-700',
-  TIMED_OUT: 'bg-slate-100 text-slate-600',
-};
+const SEARCHING = ['REQUESTED', 'SEARCHING'];
 
 export default function DashboardPage() {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const { passengerSocket } = useSocket();
   const [pickupId, setPickupId] = useState<string>(CAMPUS_PLACES[0].id);
   const [destId, setDestId] = useState<string>(CAMPUS_PLACES[1].id);
   const [error, setError] = useState('');
   const [socketError, setSocketError] = useState('');
+  // The ride this session last requested, so its outcome can be shown after it
+  // leaves /rides/active (e.g. NO_DRIVER_FOUND, DRIVER_CANCELLED, COMPLETED).
+  const [lastRideId, setLastRideId] = useState<string | null>(null);
 
   const { isLoading: authLoading } = useRequireAuth('PASSENGER');
 
@@ -98,6 +62,20 @@ export default function DashboardPage() {
     retry: (count, err: any) => err?.response?.status !== 404 && count < 2,
   });
 
+  const { data: lastRide } = useQuery({
+    queryKey: ['ride', lastRideId],
+    queryFn: async () => {
+      const res = await api.get(`/rides/${lastRideId}`);
+      return res.data.data ?? null;
+    },
+    enabled: !!lastRideId && !rideLoading && !activeRide,
+    staleTime: 0,
+  });
+
+  useEffect(() => {
+    if (activeRide?.id) setLastRideId(activeRide.id);
+  }, [activeRide?.id]);
+
   // Attach event listeners to the shared socket from SocketProvider.
   // We do NOT connect/disconnect here — that is managed by SocketProvider
   // so the connection survives page navigation within the app.
@@ -105,7 +83,7 @@ export default function DashboardPage() {
     const socket = passengerSocket;
     if (!socket) return;
 
-    const onConnectError = (err: Error) => setSocketError(`Connection error: ${err.message}`);
+    const onConnectError = (err: Error) => setSocketError(err.message);
     const onConnect = () => {
       setSocketError('');
       socket.emit('session:restore', {
@@ -172,9 +150,11 @@ export default function DashboardPage() {
       const res = await api.post('/rides', payload);
       return res.data.data;
     },
-    onSuccess: () => {
+    onSuccess: (ride) => {
+      if (ride?.id) setLastRideId(ride.id);
       queryClient.invalidateQueries({ queryKey: ['activeRide'] });
       setError('');
+      toast.success('Ride requested', 'Finding the closest driver now.');
     },
     onError: (err: any) => {
       setError(getErrorMessage(err, 'Failed to request ride'));
@@ -188,7 +168,9 @@ export default function DashboardPage() {
       return res.data.data;
     },
     onSuccess: () => {
+      setLastRideId(null);
       queryClient.invalidateQueries({ queryKey: ['activeRide'] });
+      toast.success('Ride cancelled');
     },
     onError: (err: any) => {
       setError(getErrorMessage(err, 'Could not cancel ride'));
@@ -205,262 +187,329 @@ export default function DashboardPage() {
     createMutation.mutate();
   };
 
+  const swapStops = () => {
+    setPickupId(destId);
+    setDestId(pickupId);
+    setError('');
+  };
+
   const canCancel = activeRide && PASSENGER_CANCELLABLE.includes(activeRide.status);
+  const sameStop = pickupId === destId;
+  const pickupPlace = CAMPUS_PLACES.find((p) => p.id === pickupId)!;
+  const destPlace = CAMPUS_PLACES.find((p) => p.id === destId)!;
 
   if (authLoading || rideLoading) {
     return (
-      <div className="min-h-screen flex flex-col bg-background">
-        <Navbar />
-        <main className="flex-1 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-4 text-muted-foreground">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="text-sm">Loading your dashboard…</p>
-          </div>
-        </main>
-      </div>
+      <AppShell>
+        <MapLayout map={<Skeleton className="size-full rounded-none" />} sheet={<SheetSkeleton />} />
+      </AppShell>
     );
   }
 
-  return (
-    <div className="min-h-screen flex flex-col bg-background">
-      <Navbar />
+  const connectionNotice = socketError && (
+    <Notice icon={<WifiOff />} className="mb-5">
+      <p className="font-bold">Live updates paused</p>
+      <p>Your ride status may lag until we reconnect. ({socketError})</p>
+    </Notice>
+  );
 
-      <main className="flex-1 container mx-auto px-4 py-8 max-w-6xl">
-        {/* Page header */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {activeRide ? 'Track your current ride' : 'Request a ride across campus'}
-          </p>
-        </div>
-
-        {/* Socket error banner */}
-        {socketError && (
-          <div className="mb-4 flex items-center gap-2 bg-amber-50 text-amber-800 text-sm px-4 py-3 rounded-lg border border-amber-200">
-            <AlertCircle className="h-4 w-4 shrink-0" />
-            <span>{socketError}</span>
-          </div>
-        )}
-
-        <div className="grid md:grid-cols-2 gap-6 items-start">
-          {/* LEFT COLUMN */}
-          <div className="space-y-4">
-            {!activeRide ? (
-              <Card className="shadow-sm">
-                <CardHeader className="pb-4">
-                  <CardTitle className="text-lg">Where to?</CardTitle>
-                  <CardDescription>
-                    Request a ride anywhere on campus
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <form onSubmit={handleRequestRide} className="space-y-4">
-                    {error && (
-                      <div className="flex items-start gap-2 bg-destructive/10 text-destructive text-sm p-3 rounded-lg border border-destructive/20">
-                        <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-                        <span>{error}</span>
-                      </div>
-                    )}
-
-                    {/* Campus points info banner */}
-                    <div className="flex items-start gap-2 bg-muted/50 text-muted-foreground text-xs px-3 py-2 rounded-lg">
-                      <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                      <span>Choose from campus pickup and drop-off points.</span>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="pickup" className="text-sm font-medium">
-                        Pickup location
-                      </Label>
-                      <div className="relative">
-                        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                        <select
-                          id="pickup"
-                          value={pickupId}
-                          onChange={(e) => setPickupId(e.target.value)}
-                          className="w-full pl-9 h-10 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                          required
-                        >
-                          {CAMPUS_PLACES.map((p) => (
-                            <option key={p.id} value={p.id}>{p.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="destination" className="text-sm font-medium">
-                        Destination
-                      </Label>
-                      <div className="relative">
-                        <Navigation className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary pointer-events-none" />
-                        <select
-                          id="destination"
-                          value={destId}
-                          onChange={(e) => setDestId(e.target.value)}
-                          className="w-full pl-9 h-10 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                          required
-                        >
-                          {CAMPUS_PLACES.map((p) => (
-                            <option key={p.id} value={p.id}>{p.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    <Button
-                      type="submit"
-                      className="w-full h-11 text-sm font-semibold mt-2"
-                      disabled={createMutation.isPending}
-                    >
-                      {createMutation.isPending ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Requesting…
-                        </>
-                      ) : (
-                        'Request Ride'
-                      )}
-                    </Button>
-                  </form>
-                </CardContent>
-              </Card>
-            ) : (
-              <Card className="shadow-sm overflow-hidden">
-                {/* Status bar */}
-                <div
-                  className={cn(
-                    'px-5 py-3 flex items-center justify-between',
-                    STATUS_COLORS[activeRide.status] ?? 'bg-muted'
-                  )}
+  // ── No ride: route picker ────────────────────────────────────────────────
+  if (!activeRide) {
+    const outcome =
+      lastRide && (ENDED_STATUSES.includes(lastRide.status) || lastRide.status === 'COMPLETED')
+        ? { ...PASSENGER_STATUS[lastRide.status], completed: lastRide.status === 'COMPLETED' }
+        : null;
+    return (
+      <AppShell>
+        <MapLayout
+          map={
+            <Map
+              className="size-full"
+              pickup={{ lat: pickupPlace.lat, lng: pickupPlace.lng, label: pickupPlace.name }}
+              destination={sameStop ? undefined : { lat: destPlace.lat, lng: destPlace.lng, label: destPlace.name }}
+            />
+          }
+          sheet={
+            <>
+              {connectionNotice}
+              {outcome && (
+                <Notice
+                  tone={outcome.completed ? 'neutral' : 'caution'}
+                  icon={outcome.completed ? <CircleCheck /> : <CircleAlert />}
+                  className="mb-6"
                 >
-                  <span className="text-sm font-semibold">
-                    {STATUS_LABELS[activeRide.status] ?? activeRide.status.replace(/_/g, ' ')}
-                  </span>
-                  <span className="text-xs opacity-70 font-mono">#{activeRide.id.slice(-6).toUpperCase()}</span>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-bold text-ink">{outcome.title}</p>
+                      <p>
+                        {outcome.completed
+                          ? `${lastRide.pickup.address} to ${lastRide.destination.address}.${lastRide.estimatedFare ? ` Fare ₹${lastRide.estimatedFare}.` : ''}`
+                          : outcome.detail}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setLastRideId(null)}
+                      className="-mt-1 -mr-1 grid size-8 shrink-0 place-items-center rounded-md hover:bg-ink/5"
+                      aria-label="Dismiss"
+                    >
+                      <X className="size-4" />
+                    </button>
+                  </div>
+                </Notice>
+              )}
+              <h1 className="text-3xl sm:text-4xl">Where to?</h1>
+              <p className="mt-2 text-ink-muted">Pick two campus stops and we’ll match you with the nearest driver.</p>
+
+              <form onSubmit={handleRequestRide} className="mt-8" noValidate>
+                <RouteStops
+                  variant="control"
+                  from={<StopSelect id="pickup" label="From" value={pickupId} onChange={setPickupId} />}
+                  to={
+                    <StopSelect
+                      id="destination"
+                      label="To"
+                      value={destId}
+                      onChange={setDestId}
+                      invalid={sameStop}
+                    />
+                  }
+                  action={
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={swapStops}
+                      aria-label="Swap pickup and destination"
+                      className="rounded-full"
+                    >
+                      <ArrowUpDown />
+                    </Button>
+                  }
+                />
+
+                <div aria-live="polite" className="mt-4 min-h-0">
+                  {sameStop ? (
+                    <p className="text-sm text-danger">Choose a destination that’s different from your pickup.</p>
+                  ) : error ? (
+                    <Notice tone="danger" icon={<CircleAlert />}>{error}</Notice>
+                  ) : null}
                 </div>
 
-                <CardContent className="p-5 space-y-5">
-                  {/* Route timeline */}
-                  <div className="relative pl-5 space-y-5 border-l-2 border-border ml-2">
-                    <div className="relative">
-                      <div className="absolute -left-[23px] top-1 bg-background border-2 border-border w-5 h-5 rounded-full flex items-center justify-center">
-                        <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground" />
-                      </div>
-                      <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide mb-0.5">
-                        Pickup
-                      </p>
-                      <p className="font-medium text-foreground text-sm">{activeRide.pickup.address}</p>
-                    </div>
-
-                    <div className="relative">
-                      <div className="absolute -left-[23px] top-1 bg-background border-2 border-primary/40 w-5 h-5 rounded-full flex items-center justify-center">
-                        <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-                      </div>
-                      <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide mb-0.5">
-                        Destination
-                      </p>
-                      <p className="font-medium text-foreground text-sm">{activeRide.destination.address}</p>
-                    </div>
-                  </div>
-
-                  {/* Driver info */}
-                  {activeRide.driver && (
-                    <div className="bg-muted/50 rounded-xl p-4 flex items-center gap-3">
-                      <div className="h-11 w-11 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-base shrink-0">
-                        {activeRide.driver.name.charAt(0).toUpperCase()}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-foreground text-sm truncate">
-                          {activeRide.driver.name}
-                        </p>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {[activeRide.driver.vehicleColor, activeRide.driver.vehicleModel]
-                            .filter(Boolean)
-                            .join(' ')}{' '}
-                          <span className="font-mono">{activeRide.driver.vehicleNumber}</span>
-                        </p>
-                      </div>
-                      <div className="text-sm font-semibold text-amber-600 shrink-0">
-                        ⭐ {Number(activeRide.driver.rating).toFixed(1)}
-                      </div>
-                    </div>
+                <Button
+                  type="submit"
+                  size="xl"
+                  className="mt-6 w-full"
+                  disabled={createMutation.isPending || sameStop}
+                >
+                  {createMutation.isPending ? (
+                    <>
+                      <Loader2 className="size-5 animate-spin" />
+                      Requesting…
+                    </>
+                  ) : (
+                    'Request ride'
                   )}
+                </Button>
+                <p className="mt-3 text-sm text-ink-muted">
+                  You can cancel any time before your driver reaches the pickup.
+                </p>
+              </form>
+            </>
+          }
+        />
+      </AppShell>
+    );
+  }
 
-                  {/* Fare & distance */}
-                  {activeRide.estimatedFare && (
-                    <div className="flex items-center justify-between pt-3 border-t border-border">
-                      <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                        <Clock className="h-4 w-4" />
-                        <span>{activeRide.estimatedDistanceKm} km</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <CreditCard className="h-4 w-4 text-primary" />
-                        <span className="text-base font-bold text-foreground">
-                          ₹{activeRide.estimatedFare}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
+  // ── Active ride ──────────────────────────────────────────────────────────
+  const status = PASSENGER_STATUS[activeRide.status] ?? {
+    title: activeRide.status.replace(/_/g, ' ').toLowerCase(),
+    detail: '',
+  };
+  const isSearching = SEARCHING.includes(activeRide.status);
+  const driver = activeRide.driver;
 
-                <CardFooter className="bg-muted/30 p-4 border-t">
-                  {error && (
-                    <p className="text-destructive text-xs mb-2">{error}</p>
-                  )}
-                  <Button
-                    variant="destructive"
-                    className="w-full"
-                    onClick={() => cancelMutation.mutate(activeRide.id)}
-                    disabled={cancelMutation.isPending || !canCancel}
-                  >
-                    {cancelMutation.isPending ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Cancelling…
-                      </>
-                    ) : canCancel ? (
-                      'Cancel Ride'
-                    ) : (
-                      'Cannot Cancel'
-                    )}
-                  </Button>
-                </CardFooter>
-              </Card>
+  return (
+    <AppShell>
+      <MapLayout
+        map={
+          <Map
+            className="size-full"
+            pickup={{
+              lat: parseFloat(activeRide.pickup.lat),
+              lng: parseFloat(activeRide.pickup.lng),
+              label: activeRide.pickup.address || 'Pickup',
+            }}
+            destination={{
+              lat: parseFloat(activeRide.destination.lat),
+              lng: parseFloat(activeRide.destination.lng),
+              label: activeRide.destination.address || 'Destination',
+            }}
+            driver={
+              activeRide.currentDriverLocation
+                ? {
+                    lat: parseFloat(activeRide.currentDriverLocation.lat),
+                    lng: parseFloat(activeRide.currentDriverLocation.lng),
+                    label: driver?.name ?? 'Driver',
+                  }
+                : undefined
+            }
+          />
+        }
+        sheet={
+          <>
+            {connectionNotice}
+            <div className="flex items-center justify-between gap-3 text-sm text-ink-muted">
+              <span className="inline-flex items-center gap-2">
+                {isSearching && <LiveDot />}
+                Ride <span className="tnum font-bold text-ink">{shortRideId(activeRide.id)}</span>
+              </span>
+            </div>
+
+            <div aria-live="polite">
+              <h1 className="mt-2 text-3xl first-letter:uppercase">{status.title}</h1>
+              {status.detail && <p className="mt-1.5 text-ink-muted">{status.detail}</p>}
+            </div>
+
+            <RideProgress status={activeRide.status} className="mt-6" />
+
+            {driver ? (
+              <section aria-label="Your driver" className="mt-8 flex items-center gap-3 rounded-xl border border-rule bg-surface p-4">
+                <span className="grid size-12 shrink-0 place-items-center rounded-full bg-ink font-display text-lg font-extrabold text-paper">
+                  {driver.name.charAt(0).toUpperCase()}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="flex items-center gap-2 font-bold">
+                    <span className="truncate">{driver.name}</span>
+                    <span className="inline-flex shrink-0 items-center gap-1 text-sm text-ink-muted">
+                      <Star aria-hidden className="size-3.5 fill-signal text-signal-edge" />
+                      <span className="tnum">{Number(driver.rating).toFixed(1)}</span>
+                      <span className="sr-only">rating</span>
+                    </span>
+                  </p>
+                  <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-ink-muted">
+                    <Plate>{driver.vehicleNumber}</Plate>
+                    <span className="truncate">
+                      {[driver.vehicleColor, driver.vehicleModel].filter(Boolean).join(' ')}
+                    </span>
+                  </p>
+                </div>
+              </section>
+            ) : isSearching ? (
+              <div className="mt-8 flex items-center gap-3 rounded-xl border border-dashed border-rule-control p-4 text-sm text-ink-muted">
+                <Loader2 aria-hidden className="size-4 animate-spin" />
+                Looking for drivers near {activeRide.pickup.address}…
+              </div>
+            ) : null}
+
+            <RouteStops
+              className="mt-8"
+              from={<StopText label="Pickup" name={activeRide.pickup.address} />}
+              to={<StopText label="Destination" name={activeRide.destination.address} />}
+            />
+
+            {activeRide.estimatedFare && (
+              <dl className="mt-8 grid grid-cols-2 border-y border-rule">
+                <div className="py-4">
+                  <dt className="text-sm text-ink-muted">Estimated fare</dt>
+                  <dd className="tnum font-display text-2xl font-extrabold">₹{activeRide.estimatedFare}</dd>
+                </div>
+                <div className="border-l border-rule py-4 pl-4">
+                  <dt className="text-sm text-ink-muted">Distance</dt>
+                  <dd className="tnum font-display text-2xl font-extrabold">
+                    {activeRide.estimatedDistanceKm}
+                    <span className="ml-1 text-base text-ink-muted">km</span>
+                  </dd>
+                </div>
+              </dl>
             )}
-          </div>
 
-          {/* RIGHT COLUMN - Map */}
-          <div className="h-[420px] md:h-[520px] bg-card rounded-xl shadow-sm overflow-hidden border border-border">
-            {activeRide ? (
-              <Map
-                pickup={{
-                  lat: parseFloat(activeRide.pickup.lat),
-                  lng: parseFloat(activeRide.pickup.lng),
-                  label: activeRide.pickup.address || 'Pickup',
-                }}
-                destination={{
-                  lat: parseFloat(activeRide.destination.lat),
-                  lng: parseFloat(activeRide.destination.lng),
-                  label: activeRide.destination.address || 'Destination',
-                }}
-                driver={
-                  activeRide.currentDriverLocation
-                    ? {
-                        lat: parseFloat(activeRide.currentDriverLocation.lat),
-                        lng: parseFloat(activeRide.currentDriverLocation.lng),
-                        label: 'Driver',
-                      }
-                    : undefined
-                }
-                className="h-full w-full"
-              />
-            ) : (
-              <Map className="h-full w-full" />
-            )}
-          </div>
-        </div>
-      </main>
+            <div className="mt-6 space-y-3">
+              {error && <Notice tone="danger" icon={<CircleAlert />}>{error}</Notice>}
+              {canCancel ? (
+                <ConfirmDialog
+                  title="Cancel this ride?"
+                  description={
+                    driver
+                      ? `${driver.name} is already assigned to you. You'll need to request again if you change your mind.`
+                      : "We'll stop looking for a driver."
+                  }
+                  confirmLabel="Cancel ride"
+                  cancelLabel="Keep ride"
+                  onConfirm={() => cancelMutation.mutate(activeRide.id)}
+                  trigger={
+                    <Button variant="destructive" size="lg" className="w-full" disabled={cancelMutation.isPending}>
+                      {cancelMutation.isPending ? (
+                        <>
+                          <Loader2 className="animate-spin" />
+                          Cancelling…
+                        </>
+                      ) : (
+                        'Cancel ride'
+                      )}
+                    </Button>
+                  }
+                />
+              ) : (
+                <p className="text-sm text-ink-muted">
+                  Rides can’t be cancelled once your driver is at the pickup.
+                </p>
+              )}
+            </div>
+          </>
+        }
+      />
+    </AppShell>
+  );
+}
+
+function StopSelect({
+  id,
+  label,
+  value,
+  onChange,
+  invalid,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  invalid?: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label htmlFor={id} className="text-xs text-ink-muted">
+        {label}
+      </label>
+      <NativeSelect
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-invalid={invalid || undefined}
+        className="h-12 font-display text-lg font-extrabold"
+        required
+      >
+        {CAMPUS_PLACES.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name}
+          </option>
+        ))}
+      </NativeSelect>
+    </div>
+  );
+}
+
+function SheetSkeleton() {
+  return (
+    <div aria-busy="true" aria-label="Loading your ride">
+      <Skeleton className="h-10 w-48" />
+      <Skeleton className="mt-3 h-5 w-72 max-w-full" />
+      <div className="mt-8 space-y-4">
+        <Skeleton className="h-16 w-full" />
+        <Skeleton className="h-16 w-full" />
+      </div>
+      <Skeleton className="mt-8 h-14 w-full" />
     </div>
   );
 }
