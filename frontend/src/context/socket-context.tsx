@@ -37,6 +37,10 @@ const SocketContext = createContext<SocketContextType>({
 function createSocket(namespace: 'passenger' | 'driver'): Socket {
   const socket = io(`${SOCKET_URL}/${namespace}`, {
     auth: (cb) => cb({ token: localStorage.getItem(TOKEN_KEY) }),
+    // The backend accepts only WebSocket in production (RedisIoAdapter); the
+    // client default starts with HTTP long-polling, which the server rejects
+    // with "Transport unknown", so the socket would never connect.
+    transports: ['websocket'],
     reconnection: true,
     reconnectionDelay: 1000,
     reconnectionDelayMax: 30000,
