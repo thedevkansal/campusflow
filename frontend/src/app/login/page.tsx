@@ -4,18 +4,13 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
 import Link from 'next/link';
-import { Car, Loader2, AlertCircle } from 'lucide-react';
+import { CircleAlert, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { PasswordInput } from '@/components/ui/password-input';
+import { Field } from '@/components/ui/label';
+import { AuthLayout } from '@/components/layout/auth-layout';
+import { Notice } from '@/components/layout/app-shell';
 import { api, getErrorMessage } from '@/lib/api';
 import { useAuth } from '@/context/auth-context';
 
@@ -51,91 +46,60 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/40 px-4 py-12">
-      <div className="w-full max-w-md">
-        {/* Logo above card */}
-        <div className="text-center mb-8">
-          <Link href="/" className="inline-flex items-center gap-2 text-primary font-bold text-xl">
-            <div className="bg-primary/10 p-2 rounded-xl">
-              <Car className="h-6 w-6" />
-            </div>
-            CampusFlow
+    <AuthLayout
+      title="Log in"
+      subtitle="Passengers and drivers use the same account."
+      footer={
+        <>
+          New to CampusFlow?{' '}
+          <Link href="/register" className="font-bold text-ink underline decoration-rule-control underline-offset-4 hover:decoration-ink">
+            Create an account
           </Link>
-        </div>
+        </>
+      }
+    >
+      <form onSubmit={handleSubmit} className="space-y-5">
+        {error && (
+          <Notice tone="danger" icon={<CircleAlert />}>
+            {error}
+          </Notice>
+        )}
 
-        <Card className="shadow-xl border border-border/50 bg-card">
-          <CardHeader className="space-y-1 pb-6">
-            <CardTitle className="text-2xl font-bold tracking-tight">Welcome back</CardTitle>
-            <CardDescription>Enter your credentials to continue</CardDescription>
-          </CardHeader>
+        <Field id="email" label="Email">
+          <Input
+            id="email"
+            type="email"
+            placeholder="you@university.edu"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoComplete="email"
+            aria-invalid={!!error || undefined}
+          />
+        </Field>
 
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {error && (
-                <div className="flex items-start gap-3 bg-destructive/10 text-destructive text-sm p-3 rounded-lg border border-destructive/20">
-                  <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-                  <span>{error}</span>
-                </div>
-              )}
+        <Field id="password" label="Password">
+          <PasswordInput
+            id="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            autoComplete="current-password"
+            aria-invalid={!!error || undefined}
+          />
+        </Field>
 
-              <div className="space-y-2">
-                <Label htmlFor="email" className="text-sm font-medium">
-                  Email address
-                </Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="student@university.edu"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  autoComplete="email"
-                  className="h-10"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="password" className="text-sm font-medium">
-                  Password
-                </Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  autoComplete="current-password"
-                  className="h-10"
-                />
-              </div>
-
-              <Button
-                type="submit"
-                className="w-full h-10 text-sm font-semibold mt-2"
-                disabled={loginMutation.isPending}
-              >
-                {loginMutation.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Logging in…
-                  </>
-                ) : (
-                  'Log in'
-                )}
-              </Button>
-            </form>
-          </CardContent>
-
-          <CardFooter className="flex flex-col items-center border-t pt-4 pb-5 bg-muted/30">
-            <p className="text-sm text-muted-foreground">
-              Don&apos;t have an account?{' '}
-              <Link href="/register" className="font-semibold text-primary hover:underline">
-                Sign up
-              </Link>
-            </p>
-          </CardFooter>
-        </Card>
-      </div>
-    </div>
+        <Button type="submit" size="lg" className="w-full" disabled={loginMutation.isPending}>
+          {loginMutation.isPending ? (
+            <>
+              <Loader2 className="animate-spin" />
+              Logging in…
+            </>
+          ) : (
+            'Log in'
+          )}
+        </Button>
+      </form>
+    </AuthLayout>
   );
 }

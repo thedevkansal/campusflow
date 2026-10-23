@@ -1,23 +1,14 @@
 'use client';
 
+import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  Bell,
-  Check,
-  Car,
-  Navigation,
-  ShieldCheck,
-  Loader2,
-  CheckCheck,
-} from 'lucide-react';
-import {
-  Card,
-  CardContent,
-} from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Navbar } from '@/components/layout/navbar';
+import { Bell, Car, Check, CheckCheck, CircleCheck, Loader2, Navigation } from 'lucide-react';
+import { formatDistanceToNow, isToday } from 'date-fns';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/components/ui/toast';
+import { AppShell } from '@/components/layout/app-shell';
 import { api } from '@/lib/api';
-import { formatDistanceToNow } from 'date-fns';
 import { useRequireAuth } from '@/hooks/use-require-auth';
 import { cn } from '@/lib/utils';
 
@@ -30,9 +21,16 @@ interface Notification {
   createdAt: string;
 }
 
+const TYPE_ICON: Record<string, React.ElementType> = {
+  RIDE_ASSIGNED: Car,
+  RIDE_ACCEPTED: Navigation,
+  RIDE_COMPLETED: CircleCheck,
+};
+
 export default function NotificationsPage() {
   const queryClient = useQueryClient();
-  const { isLoading: authLoading } = useRequireAuth();
+  const toast = useToast();
+  const { isLoading: authLoading, role } = useRequireAuth();
 
   // GET /notifications → { success, data: { data: Notification[], total: number } }
   // res.data.data = { data: Notification[], total: number }
@@ -60,142 +58,129 @@ export default function NotificationsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      toast.success('All notifications marked as read');
     },
   });
-
-  const getIcon = (type: string) => {
-    switch (type) {
-      case 'RIDE_ASSIGNED':
-        return <Car className="h-4 w-4 text-amber-500" />;
-      case 'RIDE_ACCEPTED':
-        return <Navigation className="h-4 w-4 text-primary" />;
-      case 'RIDE_COMPLETED':
-        return <ShieldCheck className="h-4 w-4 text-emerald-500" />;
-      default:
-        return <Bell className="h-4 w-4 text-muted-foreground" />;
-    }
-  };
-
-  if (authLoading || isLoading) {
-    return (
-      <div className="min-h-screen flex flex-col bg-background">
-        <Navbar />
-        <main className="flex-1 flex items-center justify-center">
-          <Loader2 className="h-7 w-7 animate-spin text-primary" />
-        </main>
-      </div>
-    );
-  }
 
   // data = { data: Notification[], total: number }
   const notifications: Notification[] = data?.data ?? [];
   const unreadCount = notifications.filter((n) => !n.isRead).length;
+  const groups = [
+    { label: 'Today', items: notifications.filter((n) => isToday(new Date(n.createdAt))) },
+    { label: 'Earlier', items: notifications.filter((n) => !isToday(new Date(n.createdAt))) },
+  ].filter((g) => g.items.length > 0);
+  const loading = authLoading || isLoading;
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
-      <Navbar />
-
-      <main className="flex-1 container mx-auto px-4 py-8 max-w-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+    <AppShell>
+      <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
+        <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Notifications</h1>
-            {unreadCount > 0 && (
-              <p className="text-sm text-muted-foreground mt-0.5">
-                {unreadCount} unread
-              </p>
-            )}
+            <h1 className="text-3xl sm:text-4xl">Notifications</h1>
+            <p className="mt-1 text-ink-muted" aria-live="polite">
+              {loading ? ' ' : unreadCount > 0 ? `${unreadCount} unread` : 'You’re all caught up.'}
+            </p>
           </div>
           {unreadCount > 0 && (
             <Button
               variant="outline"
               size="sm"
-              className="gap-1.5 text-xs"
               onClick={() => markAllReadMutation.mutate()}
               disabled={markAllReadMutation.isPending}
             >
-              {markAllReadMutation.isPending ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <CheckCheck className="h-3.5 w-3.5" />
-              )}
-              Mark all read
+              {markAllReadMutation.isPending ? <Loader2 className="animate-spin" /> : <CheckCheck />}
+              Mark all as read
             </Button>
           )}
         </div>
 
-        <div className="space-y-2">
-          {notifications.length === 0 ? (
-            <Card className="shadow-sm">
-              <CardContent className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
-                <div className="bg-muted/50 p-4 rounded-full mb-4">
-                  <Bell className="h-8 w-8 text-muted-foreground/50" />
+        {loading ? (
+          <ul className="mt-8 divide-y divide-rule border-y border-rule" aria-busy="true" aria-label="Loading notifications">
+            {[0, 1, 2, 3].map((i) => (
+              <li key={i} className="flex gap-4 py-5">
+                <Skeleton className="size-9 rounded-full" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-4 w-1/2" />
+                  <Skeleton className="h-4 w-4/5" />
                 </div>
-                <p className="font-medium">No notifications yet</p>
-                <p className="text-sm mt-1">You&apos;ll see ride updates here</p>
-              </CardContent>
-            </Card>
-          ) : (
-            notifications.map((notification) => (
-              <div
-                key={notification.id}
-                className={cn(
-                  'flex gap-3 p-4 rounded-xl border transition-colors',
-                  notification.isRead
-                    ? 'bg-background border-border'
-                    : 'bg-primary/5 border-primary/20'
-                )}
-              >
-                {/* Icon */}
-                <div className="mt-0.5 bg-background border border-border p-2 rounded-lg h-fit shadow-sm">
-                  {getIcon(notification.type)}
-                </div>
-
-                {/* Content */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <h4
-                      className={cn(
-                        'text-sm font-semibold leading-tight',
-                        notification.isRead ? 'text-foreground/80' : 'text-foreground'
+              </li>
+            ))}
+          </ul>
+        ) : notifications.length === 0 ? (
+          <div className="mt-10 rounded-xl border border-dashed border-rule-control px-6 py-14 text-center">
+            <Bell aria-hidden className="mx-auto size-6 text-ink-muted" />
+            <h2 className="mt-4 text-xl">No notifications yet</h2>
+            <p className="mx-auto mt-2 max-w-[36ch] text-ink-muted">
+              Updates about your rides, like a driver accepting or a ride finishing, show up here.
+            </p>
+            <Link
+              href={role === 'DRIVER' ? '/driver' : '/dashboard'}
+              className={cn(buttonVariants({ variant: 'outline' }), 'mt-6')}
+            >
+              {role === 'DRIVER' ? 'Go to Drive' : 'Book a ride'}
+            </Link>
+          </div>
+        ) : (
+          groups.map((group) => (
+            <section key={group.label} aria-labelledby={`group-${group.label}`} className="mt-10">
+              <h2 id={`group-${group.label}`} className="font-sans text-sm font-bold tracking-normal text-ink-muted">
+                {group.label}
+              </h2>
+              <ul className="mt-3 divide-y divide-rule border-y border-rule">
+                {group.items.map((n) => {
+                  const Icon = TYPE_ICON[n.type] ?? Bell;
+                  return (
+                    <li key={n.id} className="relative flex gap-4 py-5 pr-1">
+                      {!n.isRead && (
+                        <span aria-hidden className="absolute top-5 bottom-5 -left-4 w-1 rounded-r-full bg-signal sm:-left-6" />
                       )}
-                    >
-                      {notification.title}
-                    </h4>
-                    <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
-                      {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
-                    </span>
-                  </div>
-                  <p
-                    className={cn(
-                      'text-sm mt-0.5',
-                      notification.isRead ? 'text-muted-foreground' : 'text-foreground/80'
-                    )}
-                  >
-                    {notification.body}
-                  </p>
-                </div>
-
-                {/* Mark read button */}
-                {!notification.isRead && (
-                  <button
-                    onClick={() => markReadMutation.mutate(notification.id)}
-                    disabled={markReadMutation.isPending}
-                    className="mt-0.5 shrink-0 h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                    title="Mark as read"
-                  >
-                    {markReadMutation.isPending ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Check className="h-3.5 w-3.5" />
-                    )}
-                  </button>
-                )}
-              </div>
-            ))
-          )}
-        </div>
-      </main>
-    </div>
+                      <span
+                        aria-hidden
+                        className={cn(
+                          'grid size-9 shrink-0 place-items-center rounded-full',
+                          n.isRead ? 'bg-sunken text-ink-muted' : 'bg-ink text-paper'
+                        )}
+                      >
+                        <Icon className="size-4" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
+                          <h3
+                            className={cn('font-sans text-base font-bold tracking-normal', n.isRead ? 'text-ink-muted' : 'text-ink')}
+                          >
+                            {!n.isRead && <span className="sr-only">Unread: </span>}
+                            {n.title}
+                          </h3>
+                          <time dateTime={n.createdAt} className="order-last shrink-0 text-sm text-ink-muted sm:order-none">
+                            {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}
+                          </time>
+                        </div>
+                        <p className={cn('mt-0.5', n.isRead ? 'text-ink-muted' : 'text-ink')}>{n.body}</p>
+                      </div>
+                      {!n.isRead && (
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => markReadMutation.mutate(n.id)}
+                          disabled={markReadMutation.isPending && markReadMutation.variables === n.id}
+                          aria-label={`Mark “${n.title}” as read`}
+                          className="-mt-1 shrink-0"
+                        >
+                          {markReadMutation.isPending && markReadMutation.variables === n.id ? (
+                            <Loader2 className="animate-spin" />
+                          ) : (
+                            <Check />
+                          )}
+                        </Button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ))
+        )}
+      </div>
+    </AppShell>
   );
 }
