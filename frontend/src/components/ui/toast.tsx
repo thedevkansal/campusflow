@@ -31,18 +31,18 @@ function ToastList() {
       key={toast.id}
       toast={toast}
       className={cn(
-        "group flex items-start gap-3 rounded-xl bg-ink py-3 pr-2 pl-4 text-paper shadow-sheet outline-none",
+        "group flex items-start gap-3 rounded-2xl border border-rule bg-surface py-3 pr-2 pl-3.5 text-ink shadow-sheet outline-none",
         "transition-[opacity,transform] duration-200 ease-out",
         "data-[starting-style]:translate-y-2 data-[starting-style]:opacity-0",
         "data-[ending-style]:translate-y-2 data-[ending-style]:opacity-0",
-        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal"
+        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
       )}
     >
       <span
         aria-hidden
         className={cn(
-          "mt-0.5 grid size-5 shrink-0 place-items-center rounded-full",
-          toast.type === "error" ? "bg-danger text-white" : "bg-signal text-signal-ink"
+          "mt-0.5 grid size-6 shrink-0 place-items-center rounded-full",
+          toast.type === "error" ? "bg-danger-tint text-danger" : "bg-success-tint text-success"
         )}
       >
         {toast.type === "error" ? (
@@ -53,11 +53,11 @@ function ToastList() {
       </span>
       <Toast.Content className="min-w-0 flex-1">
         <Toast.Title className="text-sm font-bold" />
-        <Toast.Description className="mt-0.5 text-sm text-paper/75" />
+        <Toast.Description className="mt-0.5 text-sm text-ink-muted" />
       </Toast.Content>
       <Toast.Close
         aria-label="Dismiss"
-        className="grid size-7 shrink-0 place-items-center rounded-md text-paper/70 transition-colors hover:bg-paper/10 hover:text-paper"
+        className="grid size-7 shrink-0 place-items-center rounded-full text-ink-muted transition-colors hover:bg-sunken hover:text-ink"
       >
         <X className="size-4" />
       </Toast.Close>

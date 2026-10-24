@@ -364,15 +364,15 @@ export default function DashboardPage() {
             <RideProgress status={activeRide.status} className="mt-6" />
 
             {driver ? (
-              <section aria-label="Your driver" className="mt-8 flex items-center gap-3 rounded-xl border border-rule bg-surface p-4">
-                <span className="grid size-12 shrink-0 place-items-center rounded-full bg-ink font-display text-lg font-extrabold text-paper">
+              <section aria-label="Your driver" className="mt-6 flex items-center gap-3 rounded-2xl bg-surface shadow-card lg:bg-sunken lg:shadow-none p-4">
+                <span className="grid size-12 shrink-0 place-items-center rounded-full bg-brand-tint text-lg font-extrabold text-brand-strong">
                   {driver.name.charAt(0).toUpperCase()}
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="flex items-center gap-2 font-bold">
                     <span className="truncate">{driver.name}</span>
                     <span className="inline-flex shrink-0 items-center gap-1 text-sm text-ink-muted">
-                      <Star aria-hidden className="size-3.5 fill-signal text-signal-edge" />
+                      <Star aria-hidden className="size-3.5 fill-star text-star" />
                       <span className="tnum">{Number(driver.rating).toFixed(1)}</span>
                       <span className="sr-only">rating</span>
                     </span>
@@ -386,7 +386,7 @@ export default function DashboardPage() {
                 </div>
               </section>
             ) : isSearching ? (
-              <div className="mt-8 flex items-center gap-3 rounded-xl border border-dashed border-rule-control p-4 text-sm text-ink-muted">
+              <div className="mt-6 flex items-center gap-3 rounded-2xl bg-brand-tint p-4 text-sm font-semibold text-brand-strong">
                 <Loader2 aria-hidden className="size-4 animate-spin" />
                 Looking for drivers near {activeRide.pickup.address}…
               </div>
@@ -399,14 +399,14 @@ export default function DashboardPage() {
             />
 
             {activeRide.estimatedFare && (
-              <dl className="mt-8 grid grid-cols-2 border-y border-rule">
+              <dl className="mt-6 grid grid-cols-2 rounded-2xl bg-surface shadow-card lg:bg-sunken lg:shadow-none px-4">
                 <div className="py-4">
                   <dt className="text-sm text-ink-muted">Estimated fare</dt>
-                  <dd className="tnum font-display text-2xl font-extrabold">₹{activeRide.estimatedFare}</dd>
+                  <dd className="tnum text-2xl font-extrabold">₹{activeRide.estimatedFare}</dd>
                 </div>
                 <div className="border-l border-rule py-4 pl-4">
                   <dt className="text-sm text-ink-muted">Distance</dt>
-                  <dd className="tnum font-display text-2xl font-extrabold">
+                  <dd className="tnum text-2xl font-extrabold">
                     {activeRide.estimatedDistanceKm}
                     <span className="ml-1 text-base text-ink-muted">km</span>
                   </dd>
@@ -476,7 +476,7 @@ function StopSelect({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         aria-invalid={invalid || undefined}
-        className="h-12 font-display text-lg font-extrabold"
+        className="h-12 text-lg font-extrabold"
         required
       >
         {CAMPUS_PLACES.map((p) => (

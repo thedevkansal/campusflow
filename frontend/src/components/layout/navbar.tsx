@@ -59,12 +59,12 @@ export function Navbar() {
     .toUpperCase();
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-rule bg-paper">
-      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
+    <header className="sticky top-0 z-[600] w-full border-b border-rule bg-surface">
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
         <div className="flex items-center gap-8">
           <Link
             href={isAuthenticated ? home : '/'}
-            className="rounded-md text-ink"
+            className="rounded-xl"
             aria-label="CampusFlow home"
           >
             <Logo />
@@ -80,13 +80,12 @@ export function Navbar() {
                     href={href}
                     aria-current={active ? 'page' : undefined}
                     className={cn(
-                      'relative inline-flex h-14 items-center gap-2 px-3 text-sm font-bold transition-colors',
-                      active ? 'text-ink' : 'text-ink-muted hover:text-ink'
+                      'inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-bold transition-colors',
+                      active ? 'bg-brand-tint text-brand-strong' : 'text-ink-muted hover:bg-sunken hover:text-ink'
                     )}
                   >
                     {label}
                     {href === '/notifications' && unread > 0 && <CountBadge count={unread} />}
-                    {active && <span aria-hidden className="absolute inset-x-3 bottom-0 h-[3px] rounded-t-full bg-ink" />}
                   </Link>
                 );
               })}
@@ -104,7 +103,7 @@ export function Navbar() {
               >
                 <Bell className="size-5" />
                 {unread > 0 && (
-                  <span aria-hidden className="absolute top-2 right-2 size-2.5 rounded-full bg-signal ring-2 ring-paper" />
+                  <span aria-hidden className="absolute top-2 right-2 size-2.5 rounded-full bg-brand ring-2 ring-surface" />
                 )}
               </Link>
 
@@ -113,7 +112,7 @@ export function Navbar() {
                   aria-label={`Account menu for ${displayName}`}
                   className="flex items-center gap-2 rounded-full py-1 pr-1 pl-1 transition-colors hover:bg-sunken sm:pr-3 data-[popup-open]:bg-sunken"
                 >
-                  <span className="grid size-8 place-items-center rounded-full bg-ink font-display text-xs font-extrabold text-paper">
+                  <span className="grid size-9 place-items-center rounded-full bg-brand-tint text-xs font-extrabold text-brand-strong">
                     {initials}
                   </span>
                   <span className="hidden max-w-[140px] truncate text-sm font-bold sm:block">{displayName}</span>
@@ -139,10 +138,10 @@ export function Navbar() {
             </>
           ) : (
             <>
-              <Link href="/login" className={buttonVariants({ variant: 'ghost' })}>
+              <Link href="/login" className={buttonVariants({ variant: 'ghost', size: 'sm' })}>
                 Log in
               </Link>
-              <Link href="/register" className={buttonVariants({ variant: 'ink' })}>
+              <Link href="/register" className={buttonVariants({ size: 'sm' })}>
                 Sign up
               </Link>
             </>
@@ -155,7 +154,7 @@ export function Navbar() {
 
 function CountBadge({ count }: { count: number }) {
   return (
-    <span className="tnum inline-grid h-5 min-w-5 place-items-center rounded-full bg-signal px-1.5 text-xs font-bold text-signal-ink">
+    <span className="tnum inline-grid h-5 min-w-5 place-items-center rounded-full bg-brand px-1.5 text-xs font-bold text-white">
       <span className="sr-only">, </span>
       {count > 9 ? '9+' : count}
       <span className="sr-only"> unread</span>

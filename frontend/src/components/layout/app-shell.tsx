@@ -8,7 +8,7 @@ export function AppShell({ children, className }: { children: React.ReactNode; c
     <div className="flex min-h-dvh flex-col">
       <a
         href="#main"
-        className="sr-only z-[200] rounded-md bg-ink px-3 py-2 text-paper focus:not-sr-only focus:fixed focus:top-2 focus:left-2"
+        className="sr-only z-[200] rounded-full bg-brand px-4 py-2 font-bold text-white focus:not-sr-only focus:fixed focus:top-2 focus:left-2"
       >
         Skip to content
       </a>
@@ -21,8 +21,9 @@ export function AppShell({ children, className }: { children: React.ReactNode; c
 }
 
 /**
- * Map-first layout: a sheet of controls beside a full-height map on desktop;
- * map on top, sheet below on small screens.
+ * Map-first layout, like a ride or delivery app: the map fills the screen and a
+ * white sheet floats over it on desktop. On phones the map sits on top and the
+ * sheet slides up over its bottom edge.
  */
 export function MapLayout({
   sheet,
@@ -35,17 +36,27 @@ export function MapLayout({
   hideMapOnMobile?: boolean;
 }) {
   return (
-    <div className="flex flex-1 flex-col lg:grid lg:grid-cols-[minmax(380px,460px)_1fr]">
+    <div className="relative flex flex-1 flex-col lg:block">
       <div
         className={cn(
-          'relative h-[36vh] min-h-56 border-b border-rule lg:sticky lg:top-14 lg:order-2 lg:block lg:h-[calc(100dvh-3.5rem)] lg:border-b-0',
-          hideMapOnMobile && 'hidden'
+          'relative h-[38vh] min-h-60 lg:absolute lg:inset-0 lg:h-auto',
+          hideMapOnMobile && 'hidden lg:block'
         )}
       >
         {map}
       </div>
-      <div className="bg-paper lg:order-1 lg:border-r lg:border-rule">
-        <div className="mx-auto w-full max-w-xl px-4 pt-6 pb-10 sm:px-6 lg:pt-8">{sheet}</div>
+      <div
+        className={cn(
+          'relative z-[500] flex-1 bg-paper lg:pointer-events-none lg:absolute lg:inset-y-0 lg:left-0 lg:flex lg:w-[min(480px,100%)] lg:items-start lg:bg-transparent lg:p-6',
+          !hideMapOnMobile && '-mt-6 rounded-t-[28px] lg:mt-0 lg:rounded-none'
+        )}
+      >
+        <div className="mx-auto w-full max-w-xl px-4 pt-6 pb-10 sm:px-6 lg:pointer-events-auto lg:max-h-full lg:overflow-y-auto lg:rounded-3xl lg:bg-surface lg:p-7 lg:shadow-sheet">
+          {!hideMapOnMobile && (
+            <span aria-hidden className="mx-auto -mt-2 mb-5 block h-1.5 w-10 rounded-full bg-rule-control/40 lg:hidden" />
+          )}
+          {sheet}
+        </div>
       </div>
     </div>
   );
@@ -58,7 +69,7 @@ export function Notice({
   children,
   className,
 }: {
-  tone?: 'caution' | 'danger' | 'neutral';
+  tone?: 'caution' | 'danger' | 'neutral' | 'success';
   icon?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
@@ -67,10 +78,11 @@ export function Notice({
     <div
       role={tone === 'danger' ? 'alert' : 'status'}
       className={cn(
-        'flex items-start gap-2.5 rounded-md px-3 py-2.5 text-sm [&_svg]:mt-0.5 [&_svg]:size-4 [&_svg]:shrink-0',
-        tone === 'caution' && 'bg-signal-tint text-caution-ink',
+        'flex items-start gap-2.5 rounded-2xl px-4 py-3 text-sm [&_svg]:mt-0.5 [&_svg]:size-4 [&_svg]:shrink-0',
+        tone === 'caution' && 'bg-warning-tint text-warning',
         tone === 'danger' && 'bg-danger-tint text-danger',
-        tone === 'neutral' && 'bg-sunken text-ink-muted',
+        tone === 'neutral' && 'bg-brand-tint text-brand-strong',
+        tone === 'success' && 'bg-success-tint text-success',
         className
       )}
     >

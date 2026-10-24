@@ -3,37 +3,35 @@ import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 
-// Primary is a physical "key": marigold fill with a darker bottom edge that
-// collapses on press. Everything else stays quiet so the one action per screen wins.
+// Pill buttons. Primary is the one teal action per screen; secondary is a
+// soft teal tint; everything else stays white or transparent.
 const buttonVariants = cva(
-  "group/button relative inline-flex shrink-0 items-center justify-center gap-2 rounded-md border border-transparent font-sans font-bold whitespace-nowrap select-none outline-none transition-[background-color,border-color,color,box-shadow,transform] duration-[120ms] ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-45 aria-disabled:pointer-events-none aria-disabled:opacity-45 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button relative inline-flex shrink-0 items-center justify-center gap-2 rounded-full border border-transparent font-sans font-bold whitespace-nowrap select-none outline-none transition-[background-color,border-color,color,box-shadow,transform] duration-150 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.98] disabled:pointer-events-none disabled:opacity-45 aria-disabled:pointer-events-none aria-disabled:opacity-45 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
         default:
-          "bg-signal text-signal-ink border-signal-edge shadow-[inset_0_-2px_0_var(--signal-edge)] hover:brightness-[1.04] active:translate-y-px active:shadow-[inset_0_0_0_var(--signal-edge)]",
-        ink:
-          "bg-ink text-paper hover:bg-ink/90 active:translate-y-px",
-        outline:
-          "border-rule-control bg-surface text-ink hover:bg-sunken active:translate-y-px aria-expanded:bg-sunken",
+          "bg-brand text-white shadow-[0_6px_16px_-6px_rgb(11_127_104/0.5)] hover:bg-brand-strong",
         secondary:
-          "bg-sunken text-ink hover:bg-rule/70 active:translate-y-px",
+          "bg-brand-tint text-brand-strong hover:bg-brand-tint-2",
+        outline:
+          "border-rule bg-surface text-ink hover:border-brand-tint-2 hover:bg-brand-tint/60 aria-expanded:bg-brand-tint/60",
         ghost:
-          "text-ink hover:bg-sunken active:bg-rule/60 aria-expanded:bg-sunken",
+          "text-ink hover:bg-sunken aria-expanded:bg-sunken",
         destructive:
-          "border-danger/40 bg-surface text-danger hover:bg-danger-tint active:translate-y-px",
+          "border-danger/30 bg-surface text-danger hover:bg-danger-tint",
         "destructive-solid":
-          "bg-danger text-white hover:bg-danger/90 active:translate-y-px dark:text-paper",
-        link: "h-auto px-0 text-ink underline decoration-rule-control underline-offset-4 hover:decoration-ink",
+          "bg-danger text-white hover:bg-danger/90",
+        link: "h-auto rounded-none px-0 text-brand-strong underline-offset-4 hover:underline active:scale-100",
       },
       size: {
-        default: "h-10 px-4 text-sm",
-        xs: "h-7 gap-1 rounded-sm px-2 text-xs [&_svg:not([class*='size-'])]:size-3.5",
-        sm: "h-8 gap-1.5 px-3 text-sm [&_svg:not([class*='size-'])]:size-3.5",
-        lg: "h-12 px-5 text-base",
-        xl: "h-14 px-6 text-lg rounded-lg",
-        icon: "size-10",
-        "icon-sm": "size-8",
+        default: "h-11 px-5 text-sm",
+        xs: "h-7 gap-1 px-2.5 text-xs [&_svg:not([class*='size-'])]:size-3.5",
+        sm: "h-9 gap-1.5 px-4 text-sm [&_svg:not([class*='size-'])]:size-3.5",
+        lg: "h-12 px-6 text-base",
+        xl: "h-14 px-7 text-lg",
+        icon: "size-11",
+        "icon-sm": "size-9",
         "icon-lg": "size-12",
       },
     },

@@ -1,8 +1,66 @@
 # CampusFlow: design notes
 
-Working document for the UI refresh on branch `design/ui-refresh`. It records the
-audit, references, design brief and outcome. Business logic, API calls, socket
-events and query keys are unchanged. Only presentation and UI-only flows changed.
+Business logic, API calls, socket events and query keys are unchanged across both
+passes below. Only presentation and UI-only flows changed.
+
+---
+
+## v2: friendly light pass (current)
+
+**Why.** User feedback on v1: it looked worse than before, mostly because of the
+"black". Two causes: v1 followed the OS dark setting (near-black `#0e141b` page),
+and even in light mode it used dark ink for big fills (auth panel, toasts, avatars,
+logo tile). The ask was a lighter, friendlier app, with
+[Pronto](https://www.tuprontomx.com/) and [DoorDash](https://www.doordash.com/)
+as **references, not templates**.
+
+**What was taken from the references, as ideas only:**
+- *Pronto:* light, airy surfaces; soft grey-violet text instead of pure black; one
+  confident brand colour; rounded cards on a light grey page.
+- *DoorDash:* the booking/address bar as the hero action; pill buttons; a
+  step-by-step order tracker; white sheets floating over a map.
+
+**What is CampusFlow's own:** the jade-teal brand (`#0B7F68`, which reads as "go" and
+is neither Pronto's violet nor DoorDash's red), Figtree type, the campus-stop booking
+card, the number plate, and the layouts themselves.
+
+**Tokens (light only, `prefers-color-scheme` ignored):**
+
+| Token | Value | Use | Contrast |
+|---|---|---|---|
+| `paper` | `#F4F6F5` | page | — |
+| `surface` | `#FFFFFF` | cards, sheets | — |
+| `ink` | `#26302F` | text | 13.6:1 on white |
+| `ink-muted` | `#5C6866` | secondary text | 5.8:1 on white |
+| `rule-control` | `#87928F` | input borders | 3.2:1 |
+| `brand` | `#0B7F68` | primary action, active | white text 4.9:1 |
+| `brand-strong` | `#0A7360` | brand text on tints | 5.1:1 on `brand-tint` |
+| `brand-tint` | `#E2F4EF` | soft fills, hero band | — |
+| `success` / `warning` / `danger` | `#16803F` / `#9A5B00` / `#C62F2F` | status | AA on their tints |
+
+**Shape and type:** Figtree 400–800 for everything; pill buttons (44–56px tall);
+cards at 20–28px radius with one soft shadow; 48px inputs with a soft teal focus halo.
+
+**Screens:**
+- *Ride / Drive:* the map is full-bleed. On desktop a white sheet floats on the left
+  and the map fits the route into the uncovered area; zoom controls moved bottom-right.
+  On phones the sheet slides up over the map with a grab handle.
+- *Ride progress:* a six-segment tracker with "Step 3 of 6: On the way", in place of
+  the transit-line dots.
+- *Driver availability:* the card turns green when you're online, so state is readable at a glance.
+- *Landing:* a teal hero band with a From/To booking card and a live ride card, then
+  three numbered steps and Riding/Driving panels with one CTA each.
+- *Auth:* a light teal panel with the campus stops as chips, and the form in a white card.
+- *Notifications / Profile:* white rounded cards on the grey page.
+
+Screenshots are in [`assets/redesign/`](assets/redesign/) (390px @2x and 1440px).
+They were captured against a mocked API and socket, because Docker wasn't running.
+
+---
+
+## v1 (superseded): signage pass
+
+Kept for the audit and references, which still apply.
 
 ---
 

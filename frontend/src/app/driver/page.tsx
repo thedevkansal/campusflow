@@ -258,7 +258,7 @@ export default function DriverDashboardPage() {
 
       {/* Availability. While a ride is active it collapses to a status strip. */}
       {activeRide ? (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-rule bg-surface px-4 py-3 text-sm">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl bg-success-tint px-4 py-3 text-sm text-success">
           <LiveDot tone="success" />
           <span className="font-bold">On a ride</span>
           <span className="ml-auto flex items-center gap-2 text-ink-muted">
@@ -266,7 +266,10 @@ export default function DriverDashboardPage() {
           </span>
         </div>
       ) : (
-        <section aria-labelledby="availability" className="rounded-xl border border-rule bg-surface p-5">
+        <section
+          aria-labelledby="availability"
+          className={cn('rounded-3xl p-5 transition-colors', isOnline ? 'bg-success-tint' : 'bg-surface shadow-card lg:bg-sunken lg:shadow-none')}
+        >
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 id="availability" className="flex items-center gap-2.5 text-xl">
@@ -297,7 +300,7 @@ export default function DriverDashboardPage() {
             {driverProfile.vehicleModel && <span>{driverProfile.vehicleModel}</span>}
             {driverProfile.rating && (
               <span className="ml-auto inline-flex items-center gap-1">
-                <Star aria-hidden className="size-3.5 fill-signal text-signal-edge" />
+                <Star aria-hidden className="size-3.5 fill-star text-star" />
                 <span className="tnum font-bold text-ink">{Number(driverProfile.rating).toFixed(1)}</span>
                 <span className="sr-only">rating</span>
               </span>
@@ -344,8 +347,8 @@ export default function DriverDashboardPage() {
 
             <RideProgress status={activeRide.status} className="mt-6" />
 
-            <div className="mt-8 flex items-center gap-3 rounded-xl border border-rule bg-surface p-4">
-              <span className="grid size-12 shrink-0 place-items-center rounded-full bg-ink font-display text-lg font-extrabold text-paper">
+            <div className="mt-6 flex items-center gap-3 rounded-2xl bg-surface shadow-card lg:bg-sunken lg:shadow-none p-4">
+              <span className="grid size-12 shrink-0 place-items-center rounded-full bg-brand-tint text-lg font-extrabold text-brand-strong">
                 {(activeRide.passengerName ?? 'P').charAt(0).toUpperCase()}
               </span>
               <div className="min-w-0 flex-1">
@@ -355,7 +358,7 @@ export default function DriverDashboardPage() {
               {activeRide.estimatedFare && (
                 <div className="text-right">
                   <p className="text-sm text-ink-muted">Est. fare</p>
-                  <p className="tnum font-display text-xl font-extrabold">₹{activeRide.estimatedFare}</p>
+                  <p className="tnum text-xl font-extrabold">₹{activeRide.estimatedFare}</p>
                 </div>
               )}
             </div>

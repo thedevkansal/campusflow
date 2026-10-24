@@ -15,8 +15,8 @@ function Card({
     <div
       data-slot="card"
       className={cn(
-        "flex flex-col rounded-xl border border-rule bg-surface text-ink",
-        elevated && "border-transparent shadow-sheet dark:border-rule",
+        "flex flex-col rounded-2xl bg-surface text-ink shadow-card",
+        elevated && "shadow-sheet",
         className
       )}
       {...props}
@@ -38,7 +38,7 @@ function CardTitle({ className, ...props }: React.ComponentProps<"h2">) {
   return (
     <h2
       data-slot="card-title"
-      className={cn("font-display text-lg leading-tight font-extrabold", className)}
+      className={cn("text-lg leading-tight font-extrabold", className)}
       {...props}
     />
   )

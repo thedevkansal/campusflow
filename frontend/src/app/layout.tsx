@@ -1,19 +1,12 @@
 import type { Metadata, Viewport } from 'next';
-import { Overpass, Atkinson_Hyperlegible_Next } from 'next/font/google';
+import { Figtree } from 'next/font/google';
 import './globals.css';
 import { Providers } from '@/components/providers';
 
-// Display: Overpass, a libre take on Highway Gothic (road-sign lettering).
-const overpass = Overpass({
+// Figtree: friendly, rounded geometric sans for both headings and text.
+const figtree = Figtree({
   subsets: ['latin'],
-  variable: '--font-overpass',
-  display: 'swap',
-});
-
-// Text: Atkinson Hyperlegible Next, built for glanceable legibility.
-const atkinson = Atkinson_Hyperlegible_Next({
-  subsets: ['latin'],
-  variable: '--font-atkinson',
+  variable: '--font-figtree',
   display: 'swap',
 });
 
@@ -23,10 +16,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#f3f4f0' },
-    { media: '(prefers-color-scheme: dark)', color: '#0e141b' },
-  ],
+  themeColor: '#f5f5fa',
 };
 
 export default function RootLayout({
@@ -35,7 +25,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${overpass.variable} ${atkinson.variable}`}>
+    <html lang="en" className={figtree.variable}>
       <body className="min-h-dvh flex flex-col">
         <Providers>
           {children}

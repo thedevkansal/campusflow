@@ -95,7 +95,7 @@ export default function NotificationsPage() {
         </div>
 
         {loading ? (
-          <ul className="mt-8 divide-y divide-rule border-y border-rule" aria-busy="true" aria-label="Loading notifications">
+          <ul className="mt-8 divide-y divide-rule rounded-3xl bg-surface px-4 shadow-card sm:px-6" aria-busy="true" aria-label="Loading notifications">
             {[0, 1, 2, 3].map((i) => (
               <li key={i} className="flex gap-4 py-5">
                 <Skeleton className="size-9 rounded-full" />
@@ -107,8 +107,10 @@ export default function NotificationsPage() {
             ))}
           </ul>
         ) : notifications.length === 0 ? (
-          <div className="mt-10 rounded-xl border border-dashed border-rule-control px-6 py-14 text-center">
-            <Bell aria-hidden className="mx-auto size-6 text-ink-muted" />
+          <div className="mt-10 rounded-3xl bg-surface px-6 py-14 text-center shadow-card">
+            <span aria-hidden className="mx-auto grid size-14 place-items-center rounded-full bg-brand-tint text-brand">
+              <Bell className="size-6" />
+            </span>
             <h2 className="mt-4 text-xl">No notifications yet</h2>
             <p className="mx-auto mt-2 max-w-[36ch] text-ink-muted">
               Updates about your rides, like a driver accepting or a ride finishing, show up here.
@@ -126,19 +128,19 @@ export default function NotificationsPage() {
               <h2 id={`group-${group.label}`} className="font-sans text-sm font-bold tracking-normal text-ink-muted">
                 {group.label}
               </h2>
-              <ul className="mt-3 divide-y divide-rule border-y border-rule">
+              <ul className="mt-3 divide-y divide-rule overflow-hidden rounded-3xl bg-surface px-4 shadow-card sm:px-6">
                 {group.items.map((n) => {
                   const Icon = TYPE_ICON[n.type] ?? Bell;
                   return (
                     <li key={n.id} className="relative flex gap-4 py-5 pr-1">
                       {!n.isRead && (
-                        <span aria-hidden className="absolute top-5 bottom-5 -left-4 w-1 rounded-r-full bg-signal sm:-left-6" />
+                        <span aria-hidden className="absolute top-5 bottom-5 -left-4 w-1 rounded-r-full bg-brand sm:-left-6" />
                       )}
                       <span
                         aria-hidden
                         className={cn(
                           'grid size-9 shrink-0 place-items-center rounded-full',
-                          n.isRead ? 'bg-sunken text-ink-muted' : 'bg-ink text-paper'
+                          n.isRead ? 'bg-sunken text-ink-muted' : 'bg-brand-tint text-brand-strong'
                         )}
                       >
                         <Icon className="size-4" />
