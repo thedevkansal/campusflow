@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo } from 'react';
 import L from 'leaflet';
-import { MapContainer, TileLayer, Marker, Polyline, Tooltip, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Polyline, Tooltip, ZoomControl, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { MapProps } from './map';
 
@@ -22,7 +22,13 @@ function FitToRoute({ points }: { points: [number, number][] }) {
   const key = points.map((p) => p.join(',')).join('|');
   useEffect(() => {
     if (points.length >= 2) {
-      map.fitBounds(L.latLngBounds(points), { padding: [56, 56], maxZoom: 17 });
+      // On desktop the ride sheet floats over the left ~500px, so keep the route clear of it.
+      const sheetOverlap = map.getSize().x >= 1024 ? 520 : 0;
+      map.fitBounds(L.latLngBounds(points), {
+        paddingTopLeft: [56 + sheetOverlap, 56],
+        paddingBottomRight: [56, 56],
+        maxZoom: 17,
+      });
     } else if (points.length === 1) {
       map.setView(points[0], 16);
     }
@@ -43,26 +49,28 @@ export default function MapInner({ pickup, destination, driver }: MapProps) {
   return (
     <MapContainer
       center={framePoints[0] ?? CAMPUS_CENTER}
-      zoom={15}
+      zoom={16}
       scrollWheelZoom={false}
+      zoomControl={false}
       style={{ height: '100%', width: '100%' }}
     >
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
+      <ZoomControl position="bottomright" />
       <FitToRoute points={framePoints} />
 
       {pickup && destination && (
         <>
-          {/* Casing + ink core, like a line on a transit map */}
+          {/* White casing + teal core so the route reads on any map tile */}
           <Polyline
             positions={[[pickup.lat, pickup.lng], [destination.lat, destination.lng]]}
-            pathOptions={{ color: '#ffffff', weight: 9, opacity: 0.9, lineCap: 'round' }}
+            pathOptions={{ color: '#ffffff', weight: 10, opacity: 0.95, lineCap: 'round' }}
           />
           <Polyline
             positions={[[pickup.lat, pickup.lng], [destination.lat, destination.lng]]}
-            pathOptions={{ color: '#17222f', weight: 4, lineCap: 'round' }}
+            pathOptions={{ color: '#0b7f68', weight: 5, lineCap: 'round' }}
           />
         </>
       )}

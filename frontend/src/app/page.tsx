@@ -1,146 +1,164 @@
 import Link from 'next/link';
-import { Star } from 'lucide-react';
+import { ArrowRight, Check, Navigation, Star } from 'lucide-react';
 import { buttonVariants } from '@/components/ui/button';
 import { Navbar } from '@/components/layout/navbar';
 import { Logo } from '@/components/brand/logo';
-import { RouteStops, StopText, RideProgress, Plate } from '@/components/ride/route-line';
+import { RouteStops, StopText, RideProgress, Plate, Avatar } from '@/components/ride/route-line';
 import { cn } from '@/lib/utils';
 
 const STEPS = [
   { title: 'Choose two stops', body: 'Pick where you are and where you’re going from the campus stops.' },
   { title: 'Get matched', body: 'The nearest available driver gets your request and accepts it.' },
-  { title: 'Meet at the pickup', body: 'Check the number plate shown in the app, then hop on.' },
-  { title: 'Ride and arrive', body: 'Your fare is set by distance and shown with your ride.' },
+  { title: 'Hop on and go', body: 'Check the number plate, ride, and pay a fare set by distance.' },
 ];
 
 const RIDING = [
-  ['See your driver coming', 'Their location updates on the map until they reach you.'],
-  ['Know the fare upfront', 'A base fare plus a per-kilometre rate. No surge.'],
-  ['Change of plans', 'Cancel any time before your driver gets to the pickup.'],
+  'See your driver coming on the map',
+  'Know the fare before you’re picked up',
+  'Cancel any time before your driver arrives',
 ];
 
 const DRIVING = [
-  ['Drive between classes', 'Go online or offline with one tap.'],
-  ['See the route first', 'Every request shows the pickup and destination before you accept.'],
-  ['Build your rating', 'Passengers see your rating and vehicle on every ride.'],
+  'Go online or offline with one tap',
+  'See the pickup and destination before you accept',
+  'Build your rating with every ride',
 ];
 
 export default function LandingPage() {
   return (
-    <div className="flex min-h-dvh flex-col">
+    <div className="flex min-h-dvh flex-col bg-surface">
       <Navbar />
 
       <main id="main" className="flex-1">
-        {/* Hero: the product itself */}
-        <section className="mx-auto grid max-w-7xl gap-12 px-4 pt-12 pb-20 sm:px-6 md:pt-20 lg:grid-cols-[1.1fr_1fr] lg:items-center lg:gap-16 lg:pb-28">
-          <div>
-            <h1 className="max-w-[13ch] text-[2.75rem] leading-[0.98] tracking-[-0.035em] sm:text-6xl lg:text-[4.5rem]">
-              Main Gate to Library, without the walk.
-            </h1>
-            <p className="mt-6 max-w-[46ch] text-lg text-ink-muted">
-              Book a ride between campus stops, check your driver’s number plate, and follow them on the map
-              until they pull up.
-            </p>
-            <div className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-4">
-              <Link href="/register" className={buttonVariants({ size: 'xl' })}>
-                Book a ride
-              </Link>
-              <Link
-                href="/register"
-                className="font-bold text-ink underline decoration-rule-control decoration-2 underline-offset-[6px] transition-colors hover:decoration-ink"
-              >
-                Drive with CampusFlow
-              </Link>
-            </div>
-          </div>
-
-          <figure className="relative mx-auto w-full max-w-md lg:mx-0 lg:justify-self-end">
-            <div className="rounded-2xl bg-surface p-6 shadow-sheet ring-1 ring-rule sm:p-7">
-              <p className="text-sm text-ink-muted">
-                Ride <span className="tnum font-bold text-ink">4K7Q2M</span>
+        {/* Hero: the booking card is the first thing you see */}
+        <section className="px-3 pt-3 sm:px-4 sm:pt-4">
+          <div className="mx-auto grid max-w-7xl items-center gap-10 rounded-[32px] bg-brand-tint px-5 py-10 sm:px-10 sm:py-14 lg:grid-cols-[1.05fr_1fr] lg:gap-14 lg:px-14 lg:py-20">
+            <div>
+              <h1 className="max-w-[14ch] text-[2.6rem] leading-[1.02] sm:text-6xl">
+                Get across campus in minutes.
+              </h1>
+              <p className="mt-5 max-w-[44ch] text-lg text-ink-muted">
+                Book a ride between campus stops, see your driver on the map, and know the fare before
+                you go.
               </p>
-              <p className="mt-1 font-display text-3xl font-extrabold tracking-[-0.02em]">Driver on the way</p>
-              <p className="mt-1 text-ink-muted">Head to your pickup point.</p>
-              <RideProgress status="ACCEPTED" className="mt-6" drawOnMount />
 
-              <div className="mt-7 flex items-center gap-3 rounded-xl border border-rule p-4">
-                <span className="grid size-11 shrink-0 place-items-center rounded-full bg-ink font-display text-lg font-extrabold text-paper">
-                  R
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="flex items-center gap-2 font-bold">
-                    Rohit M.
-                    <span className="inline-flex items-center gap-1 text-sm font-normal text-ink-muted">
-                      <Star aria-hidden className="size-3.5 fill-signal text-signal-edge" />
-                      <span className="tnum">4.9</span>
-                    </span>
-                  </p>
-                  <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-ink-muted">
-                    <Plate>KA05MX4821</Plate>
-                    Grey Activa
-                  </p>
+              <div className="mt-8 max-w-xl rounded-3xl bg-surface p-3 shadow-sheet sm:p-4">
+                <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-center">
+                  <div className="flex items-center gap-3 rounded-2xl bg-sunken px-4 py-3">
+                    <span aria-hidden className="size-3 shrink-0 rounded-full border-[3px] border-brand bg-surface" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-ink-muted">From</p>
+                      <p className="truncate font-bold">Main Gate</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 rounded-2xl bg-sunken px-4 py-3">
+                    <span aria-hidden className="size-3 shrink-0 rounded-full bg-brand" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-ink-muted">To</p>
+                      <p className="truncate font-bold">Library</p>
+                    </div>
+                  </div>
+                  <Link href="/register" className={cn(buttonVariants({ size: 'lg' }), 'h-14')}>
+                    Find a ride
+                    <ArrowRight />
+                  </Link>
                 </div>
               </div>
-
-              <RouteStops
-                className="mt-7"
-                from={<StopText label="Pickup" name="Main Gate" />}
-                to={<StopText label="Destination" name="Library" />}
-              />
+              <p className="mt-4 text-sm text-ink-muted">
+                Already have an account?{' '}
+                <Link href="/login" className="font-bold text-brand-strong hover:underline">
+                  Log in
+                </Link>
+              </p>
             </div>
-            <figcaption className="mt-4 text-center text-sm text-ink-muted lg:text-left">
-              What you see while your driver is on the way.
-            </figcaption>
-          </figure>
-        </section>
 
-        {/* How a ride runs: a real sequence, drawn as one line */}
-        <section aria-labelledby="how" className="border-y border-rule bg-surface">
-          <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6">
-            <h2 id="how" className="text-3xl sm:text-4xl">How a ride runs</h2>
-            <ol className="relative mt-12 grid gap-10 md:grid-cols-4 md:gap-8">
-              {STEPS.map((step, i) => (
-                <li key={step.title} className="relative pl-10 md:pt-10 md:pl-0">
-                  {/* Connector to the next stop, so the line ends at the last one */}
-                  {i < STEPS.length - 1 && (
-                    <span
-                      aria-hidden
-                      className="absolute top-2 -bottom-10 left-[7px] w-[3px] bg-ink md:top-[7px] md:-right-8 md:bottom-auto md:left-2 md:h-[3px] md:w-auto"
-                    />
-                  )}
-                  <span
-                    aria-hidden
-                    className={cn(
-                      'absolute top-0 left-0 z-10 size-[17px]',
-                      i === STEPS.length - 1
-                        ? 'rounded-[4px] bg-ink ring-[3px] ring-signal ring-inset'
-                        : 'rounded-full border-[3px] border-ink bg-surface'
-                    )}
-                  />
-                  <h3 className="text-xl">{step.title}</h3>
-                  <p className="mt-2 max-w-[32ch] text-ink-muted">{step.body}</p>
-                </li>
-              ))}
-            </ol>
+            {/* What a ride looks like once it's booked */}
+            <figure className="mx-auto w-full max-w-md lg:justify-self-end">
+              <div className="rounded-3xl bg-surface p-6 shadow-sheet sm:p-7">
+                <div className="flex items-center justify-between">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-success-tint px-3 py-1 text-xs font-bold text-success">
+                    <Navigation aria-hidden className="size-3.5" />
+                    Driver on the way
+                  </span>
+                  <span className="text-sm font-semibold text-ink-muted">3 min away</span>
+                </div>
+                <p className="mt-4 text-2xl font-extrabold tracking-[-0.02em]">Rohit is heading to you</p>
+                <RideProgress status="ACCEPTED" className="mt-5" drawOnMount />
+
+                <div className="mt-6 flex items-center gap-3 rounded-2xl bg-sunken p-4">
+                  <Avatar name="Rohit M" />
+                  <div className="min-w-0 flex-1">
+                    <p className="flex items-center gap-2 font-bold">
+                      Rohit M.
+                      <span className="inline-flex items-center gap-1 text-sm font-semibold text-ink-muted">
+                        <Star aria-hidden className="size-3.5 fill-star text-star" />
+                        <span className="tnum">4.9</span>
+                      </span>
+                    </p>
+                    <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-ink-muted">
+                      <Plate>KA05MX4821</Plate>
+                      Grey Activa
+                    </p>
+                  </div>
+                </div>
+
+                <RouteStops
+                  className="mt-5"
+                  from={<StopText label="Pickup" name="Main Gate" />}
+                  to={<StopText label="Destination" name="Library" />}
+                />
+              </div>
+              <figcaption className="sr-only">Example of a ride in progress</figcaption>
+            </figure>
           </div>
         </section>
 
-        {/* Two audiences, plain lists */}
-        <section className="mx-auto grid max-w-7xl gap-16 px-4 py-20 sm:px-6 md:grid-cols-2 md:gap-12">
-          <AudienceList id="riding" title="Riding" items={RIDING} />
-          <AudienceList id="driving" title="Driving" items={DRIVING} />
+        {/* How it works: a real sequence */}
+        <section aria-labelledby="how" className="mx-auto max-w-7xl px-4 py-20 sm:px-6">
+          <h2 id="how" className="text-3xl sm:text-4xl">How it works</h2>
+          <p className="mt-3 max-w-[52ch] text-lg text-ink-muted">Three steps from your current stop to the next one.</p>
+          <ol className="mt-10 grid gap-4 md:grid-cols-3">
+            {STEPS.map((step, i) => (
+              <li key={step.title} className="rounded-3xl bg-paper p-7">
+                <span
+                  aria-hidden
+                  className="tnum grid size-11 place-items-center rounded-full bg-brand text-lg font-extrabold text-white"
+                >
+                  {i + 1}
+                </span>
+                <h3 className="mt-5 text-xl">{step.title}</h3>
+                <p className="mt-2 text-ink-muted">{step.body}</p>
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        {/* Two audiences */}
+        <section className="mx-auto grid max-w-7xl gap-4 px-4 pb-20 sm:px-6 md:grid-cols-2">
+          <AudiencePanel
+            title="Riding"
+            body="For getting to class, the library, or back to the hostel."
+            items={RIDING}
+            cta={{ href: '/register', label: 'Book a ride' }}
+            tone="plain"
+          />
+          <AudiencePanel
+            title="Driving"
+            body="For students with a vehicle and a free hour between classes."
+            items={DRIVING}
+            cta={{ href: '/register', label: 'Start driving' }}
+            tone="tint"
+          />
         </section>
       </main>
 
       <footer className="border-t border-rule">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-8 text-sm text-ink-muted sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <div className="flex items-center gap-4 text-ink">
-            <Logo />
-          </div>
+          <Logo />
           <p>Built for E-Summit 2026. Map data © OpenStreetMap contributors.</p>
           <nav aria-label="Footer" className="flex gap-6">
-            <Link href="/login" className="font-bold text-ink hover:underline">Log in</Link>
-            <Link href="/register" className="font-bold text-ink hover:underline">Sign up</Link>
+            <Link href="/login" className="font-bold text-ink hover:text-brand-strong">Log in</Link>
+            <Link href="/register" className="font-bold text-ink hover:text-brand-strong">Sign up</Link>
           </nav>
         </div>
       </footer>
@@ -148,18 +166,39 @@ export default function LandingPage() {
   );
 }
 
-function AudienceList({ id, title, items }: { id: string; title: string; items: string[][] }) {
+function AudiencePanel({
+  title,
+  body,
+  items,
+  cta,
+  tone,
+}: {
+  title: string;
+  body: string;
+  items: string[];
+  cta: { href: string; label: string };
+  tone: 'plain' | 'tint';
+}) {
   return (
-    <div>
-      <h2 id={id} className="text-3xl">{title}</h2>
-      <dl aria-labelledby={id} className="mt-6 divide-y divide-rule border-y border-rule">
-        {items.map(([term, detail]) => (
-          <div key={term} className="grid gap-1 py-5 sm:grid-cols-[14rem_1fr] sm:gap-6">
-            <dt className="font-bold">{term}</dt>
-            <dd className="text-ink-muted">{detail}</dd>
-          </div>
+    <div className={cn('flex flex-col rounded-[32px] p-8 sm:p-10', tone === 'tint' ? 'bg-brand-tint' : 'bg-paper')}>
+      <h2 className="text-3xl">{title}</h2>
+      <p className="mt-2 text-ink-muted">{body}</p>
+      <ul className="mt-6 space-y-3">
+        {items.map((item) => (
+          <li key={item} className="flex items-start gap-3 font-semibold">
+            <span aria-hidden className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full bg-brand text-white">
+              <Check className="size-3.5" strokeWidth={3} />
+            </span>
+            {item}
+          </li>
         ))}
-      </dl>
+      </ul>
+      <Link
+        href={cta.href}
+        className={cn(buttonVariants({ variant: tone === 'tint' ? 'default' : 'outline', size: 'lg' }), 'mt-8 self-start')}
+      >
+        {cta.label}
+      </Link>
     </div>
   );
 }

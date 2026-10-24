@@ -99,7 +99,7 @@ export default function RegisterPage() {
       footer={
         <>
           Already have an account?{' '}
-          <Link href="/login" className="font-bold text-ink underline decoration-rule-control underline-offset-4 hover:decoration-ink">
+          <Link href="/login" className="font-bold text-brand-strong underline decoration-brand-tint-2 decoration-2 underline-offset-4 hover:decoration-brand">
             Log in
           </Link>
         </>
@@ -122,7 +122,7 @@ export default function RegisterPage() {
             {ROLES.map((r) => (
               <label
                 key={r.value}
-                className="group relative flex cursor-pointer flex-col gap-1 rounded-lg border border-rule-control bg-surface p-4 transition-[border-color,box-shadow] duration-[120ms] hover:border-ink/60 has-[[data-checked]]:border-ink has-[[data-checked]]:shadow-[inset_0_0_0_1px_var(--ink)] has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring"
+                className="group relative flex cursor-pointer flex-col gap-1 rounded-lg border border-rule-control bg-surface p-4 transition-[border-color,box-shadow] duration-[120ms] hover:border-ink/60 has-[[data-checked]]:border-brand has-[[data-checked]]:bg-brand-tint/50 has-[[data-checked]]:shadow-[inset_0_0_0_1px_var(--brand)] has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring"
               >
                 <span className="flex items-center justify-between">
                   <span id={`role-${r.value}`} className="font-display text-lg font-extrabold">{r.title}</span>
@@ -130,9 +130,9 @@ export default function RegisterPage() {
                     value={r.value}
                     aria-labelledby={`role-${r.value}`}
                     aria-describedby={`role-${r.value}-body`}
-                    className="grid size-5 place-items-center rounded-full border-2 border-rule-control bg-surface outline-none data-[checked]:border-ink"
+                    className="grid size-5 place-items-center rounded-full border-2 border-rule-control bg-surface outline-none data-[checked]:border-brand"
                   >
-                    <Radio.Indicator className="size-2.5 rounded-full bg-ink" />
+                    <Radio.Indicator className="size-2.5 rounded-full bg-brand" />
                   </Radio.Root>
                 </span>
                 <span id={`role-${r.value}-body`} className="text-sm text-ink-muted">{r.body}</span>

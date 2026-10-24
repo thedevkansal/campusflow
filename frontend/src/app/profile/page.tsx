@@ -207,7 +207,7 @@ export default function ProfilePage() {
       <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
         {/* Identity */}
         <header className="flex items-center gap-4 sm:gap-5">
-          <span className="grid size-16 shrink-0 place-items-center rounded-full bg-ink font-display text-2xl font-extrabold text-paper">
+          <span className="grid size-16 shrink-0 place-items-center rounded-full bg-brand-tint text-2xl font-extrabold text-brand-strong">
             {initials}
           </span>
           <div className="min-w-0">
@@ -220,12 +220,12 @@ export default function ProfilePage() {
         </header>
 
         {/* Stats: plain numbers on a rule, not tiles */}
-        <dl className="mt-10 grid grid-cols-2 border-y border-rule">
+        <dl className="mt-8 grid grid-cols-2 rounded-3xl bg-surface px-6 shadow-card">
           <div className="py-5 pr-4">
             <dt className="text-sm text-ink-muted">Rating</dt>
             <dd className="mt-1 flex items-baseline gap-2">
-              <span className="tnum font-display text-3xl font-extrabold">{displayRating}</span>
-              <Star aria-hidden className="size-4 translate-y-[-2px] fill-signal text-signal-edge" />
+              <span className="tnum text-3xl font-extrabold">{displayRating}</span>
+              <Star aria-hidden className="size-4 translate-y-[-2px] fill-star text-star" />
               <span className="text-sm text-ink-muted">
                 from {displayTotalRatings} {displayTotalRatings === 1 ? 'rating' : 'ratings'}
               </span>
@@ -233,14 +233,14 @@ export default function ProfilePage() {
           </div>
           <div className="border-l border-rule py-5 pl-4 sm:pl-6">
             <dt className="text-sm text-ink-muted">Rides</dt>
-            <dd className="tnum mt-1 font-display text-3xl font-extrabold">{profile.totalRides ?? 0}</dd>
+            <dd className="tnum mt-1 text-3xl font-extrabold">{profile.totalRides ?? 0}</dd>
           </div>
         </dl>
 
         {/* Account */}
         <section aria-labelledby="account" className="mt-10">
           <h2 id="account" className="text-xl">Account</h2>
-          <dl className="mt-4 divide-y divide-rule rounded-xl border border-rule bg-surface">
+          <dl className="mt-4 divide-y divide-rule rounded-3xl bg-surface shadow-card">
             <InfoRow label="Name" value={profile.name} />
             <InfoRow label="Email" value={profile.email} />
             <InfoRow label="Account type" value={ROLE_LABEL[profile.role]} />
@@ -260,7 +260,7 @@ export default function ProfilePage() {
               )}
             </div>
 
-            <div className="mt-4 rounded-xl border border-rule bg-surface p-5">
+            <div className="mt-4 rounded-3xl bg-surface p-6 shadow-card">
               {isDriverLoading ? (
                 <div className="space-y-3" aria-busy="true">
                   <Skeleton className="h-8 w-40" />
@@ -377,7 +377,7 @@ function StatusPill({ tone, children }: { tone: 'success' | 'caution' | 'neutral
       className={cn(
         'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-bold',
         tone === 'success' && 'bg-success-tint text-success',
-        tone === 'caution' && 'bg-signal-tint text-caution-ink',
+        tone === 'caution' && 'bg-warning-tint text-warning',
         tone === 'neutral' && 'bg-sunken text-ink-muted'
       )}
     >

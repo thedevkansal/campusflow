@@ -52,7 +52,7 @@ export default function LoginPage() {
       footer={
         <>
           New to CampusFlow?{' '}
-          <Link href="/register" className="font-bold text-ink underline decoration-rule-control underline-offset-4 hover:decoration-ink">
+          <Link href="/register" className="font-bold text-brand-strong underline decoration-brand-tint-2 decoration-2 underline-offset-4 hover:decoration-brand">
             Create an account
           </Link>
         </>
