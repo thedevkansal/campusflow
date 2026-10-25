@@ -25,6 +25,7 @@ import { RideEventsService } from '@modules/gateway/ride-events.service';
 import { RegisterDriverDto } from './dto/register-driver.dto';
 import { UpdateDriverDto } from './dto/update-driver.dto';
 import { UpdateLocationDto } from './dto/update-location.dto';
+import { GoOnlineDto } from './dto/go-online.dto';
 
 /** driver:status TTL in seconds (REDIS_SCHEMA.md §1 — sliding 60s) */
 const DRIVER_STATUS_TTL = 60;
@@ -157,13 +158,19 @@ export class DriversService {
    *
    * Source: docs/RBAC.md — POST /drivers/online: DRIVER 🔒
    */
-  async goOnline(userId: string): Promise<{ status: DriverStatus }> {
+  async goOnline(userId: string, dto: GoOnlineDto = {}): Promise<{ status: DriverStatus }> {
     const driver = await this.requireDriverRecord(userId);
     await this.driversRepository.updateStatus(driver.id, DriverStatus.ONLINE);
 
     // Redis writes — required by REDIS_SCHEMA.md §1 (driver:status) and §4 (drivers:online)
     await this.redis.set(this.redis.keys.driverStatus(driver.id), 'ONLINE', DRIVER_STATUS_TTL);
     await this.redis.sadd(this.redis.keys.driversOnline(), driver.id);
+
+    // Without a position the driver is not in drivers:geo, so matching cannot
+    // find them until their first heartbeat. Index them now when we can.
+    if (dto.latitude !== undefined && dto.longitude !== undefined) {
+      await this.writeLocation(driver.id, { latitude: dto.latitude, longitude: dto.longitude });
+    }
 
     this.logger.log(`Driver online: driverId=${driver.id}`);
     return { status: DriverStatus.ONLINE };
@@ -214,7 +221,24 @@ export class DriversService {
       });
     }
 
-    const location = await this.driversRepository.upsertLocation(driver.id, {
+    const location = await this.writeLocation(driver.id, dto);
+
+    return {
+      latitude: location.latitude.toString(),
+      longitude: location.longitude.toString(),
+      updatedAt: location.updatedAt,
+    };
+  }
+
+  // ─── Private Helpers ───────────────────────────────────────────────────────
+
+  /**
+   * Persist a driver position to PostgreSQL and Redis (geo index, location
+   * hash, status TTL) and forward it to the passenger of any active ride.
+   * Shared by PATCH /drivers/location and POST /drivers/online.
+   */
+  private async writeLocation(driverId: string, dto: UpdateLocationDto) {
+    const location = await this.driversRepository.upsertLocation(driverId, {
       latitude: dto.latitude,
       longitude: dto.longitude,
       heading: dto.heading,
@@ -227,17 +251,17 @@ export class DriversService {
       this.redis.keys.driversGeo(),
       dto.longitude,
       dto.latitude,
-      driver.id,
+      driverId,
     );
 
     // Slide the driver:status TTL on every location heartbeat (REDIS_SCHEMA.md §1)
-    const currentStatus = await this.redis.get(this.redis.keys.driverStatus(driver.id));
+    const currentStatus = await this.redis.get(this.redis.keys.driverStatus(driverId));
     if (currentStatus) {
-      await this.redis.set(this.redis.keys.driverStatus(driver.id), currentStatus, DRIVER_STATUS_TTL);
+      await this.redis.set(this.redis.keys.driverStatus(driverId), currentStatus, DRIVER_STATUS_TTL);
     }
 
     // Slide driver:location hash TTL (REDIS_SCHEMA.md §2)
-    const locationKey = this.redis.keys.driverLocation(driver.id);
+    const locationKey = this.redis.keys.driverLocation(driverId);
     await this.redis.hset(locationKey, {
       lat: dto.latitude.toString(),
       lng: dto.longitude.toString(),
@@ -246,25 +270,19 @@ export class DriversService {
     await this.redis.expire(locationKey, DRIVER_LOCATION_TTL);
 
     // Emit location update to active ride passenger (if any)
-    const activeRideRaw = await this.redis.get(this.redis.keys.driverActiveRide(driver.id));
+    const activeRideRaw = await this.redis.get(this.redis.keys.driverActiveRide(driverId));
     if (activeRideRaw) {
       const { rideId } = JSON.parse(activeRideRaw) as {
         rideId: string;
         passengerId: string;
       };
       this.rideEventsService.emitDriverLocationUpdated(
-        rideId, driver.id, dto.latitude, dto.longitude,
+        rideId, driverId, dto.latitude, dto.longitude,
       );
     }
 
-    return {
-      latitude: location.latitude.toString(),
-      longitude: location.longitude.toString(),
-      updatedAt: location.updatedAt,
-    };
+    return location;
   }
-
-  // ─── Private Helpers ───────────────────────────────────────────────────────
 
   /**
    * Fetch the driver record for a given userId or throw 404.

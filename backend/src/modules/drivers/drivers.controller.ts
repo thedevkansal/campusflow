@@ -27,6 +27,7 @@ import { DriversService, DriverProfileData } from './drivers.service';
 import { RegisterDriverDto } from './dto/register-driver.dto';
 import { UpdateDriverDto } from './dto/update-driver.dto';
 import { UpdateLocationDto } from './dto/update-location.dto';
+import { GoOnlineDto } from './dto/go-online.dto';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from '@modules/auth/guards/roles.guard';
 import { CurrentUser } from '@common/decorators/current-user.decorator';
@@ -102,6 +103,8 @@ export class DriversController {
    * POST /api/v1/drivers/online
    *
    * Marks the driver as ONLINE (available for ride matching).
+   * Optional body { latitude, longitude } indexes the driver for matching
+   * immediately instead of waiting for the first location heartbeat.
    *
    * Source: docs/API_CONTRACTS.md — POST /drivers/online
    * Source: docs/RBAC.md — DRIVER 🔒 only
@@ -112,8 +115,9 @@ export class DriversController {
   @Roles(Role.DRIVER)
   async goOnline(
     @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: GoOnlineDto,
   ): Promise<ApiSuccessResponse<{ status: DriverStatus }>> {
-    const data = await this.driversService.goOnline(user.id);
+    const data = await this.driversService.goOnline(user.id, dto);
     return { success: true, data, message: 'You are now online' };
   }
 

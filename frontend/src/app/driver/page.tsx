@@ -172,7 +172,13 @@ export default function DriverDashboardPage() {
   // Online toggle
   const toggleOnlineMutation = useMutation({
     mutationFn: async (goOnline: boolean) => {
-      await api.post(goOnline ? '/drivers/online' : '/drivers/offline');
+      if (goOnline) {
+        // Send our position so matching can find us before the first heartbeat.
+        const { latitude, longitude } = await getGeolocation();
+        await api.post('/drivers/online', { latitude, longitude });
+      } else {
+        await api.post('/drivers/offline');
+      }
       return goOnline;
     },
     onSuccess: (goOnline) => {
