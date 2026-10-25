@@ -80,8 +80,8 @@ Rules:
 
 **Fields:**
 ```
-lat        → float string   (e.g., "12.9716")
-lng        → float string   (e.g., "77.5946")
+lat        → float string   (e.g., "29.8654")
+lng        → float string   (e.g., "77.8894")
 heading    → float string   (degrees 0–360, optional)
 speed      → float string   (km/h, optional)
 updated_at → ISO 8601 string

@@ -1,27 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { AppConfigService } from '@common/config/app-config.service';
+import { Route, RoutingService } from './routing.service';
 
-export interface FareEstimate {
-  distanceKm: number;
+export interface FareEstimate extends Route {
   estimatedFare: number;
 }
 
 @Injectable()
 export class FareEngineService {
-  constructor(private readonly config: AppConfigService) {}
-
-  /** Haversine great-circle distance in km. */
-  distanceKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
-    const R = 6371;
-    const dLat = ((lat2 - lat1) * Math.PI) / 180;
-    const dLng = ((lng2 - lng1) * Math.PI) / 180;
-    const a =
-      Math.sin(dLat / 2) ** 2 +
-      Math.cos((lat1 * Math.PI) / 180) *
-        Math.cos((lat2 * Math.PI) / 180) *
-        Math.sin(dLng / 2) ** 2;
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  }
+  constructor(
+    private readonly config: AppConfigService,
+    private readonly routing: RoutingService,
+  ) {}
 
   /** Calculate fare for a given distance. */
   fareForDistance(distKm: number): number {
@@ -30,9 +20,14 @@ export class FareEngineService {
     );
   }
 
-  /** One-shot helper: distance + fare from coordinates. */
-  estimate(lat1: number, lng1: number, lat2: number, lng2: number): FareEstimate {
-    const distKm = this.distanceKm(lat1, lng1, lat2, lng2);
-    return { distanceKm: distKm, estimatedFare: this.fareForDistance(distKm) };
+  /**
+   * Road distance + fare from coordinates. Falls back to straight-line
+   * distance when the router is unavailable (see RoutingService).
+   */
+  async estimate(lat1: number, lng1: number, lat2: number, lng2: number): Promise<FareEstimate> {
+    const route = await this.routing.route(lat1, lng1, lat2, lng2);
+    // Match the DB column precision (Decimal(10, 3)) so estimate == stored value.
+    const distanceKm = parseFloat(route.distanceKm.toFixed(3));
+    return { ...route, distanceKm, estimatedFare: this.fareForDistance(distanceKm) };
   }
 }

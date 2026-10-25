@@ -9,10 +9,23 @@ export interface Location {
   label?: string;
 }
 
+export interface LatLng {
+  lat: number;
+  lng: number;
+}
+
 export interface MapProps {
   pickup?: Location;
   destination?: Location;
   driver?: Location;
+  /** Road route as [lat, lng] pairs; a straight pickup→destination line is drawn when absent. */
+  route?: [number, number][];
+  /** Makes the map tappable, e.g. to drop a pickup or destination pin. */
+  onMapClick?: (point: LatLng) => void;
+  /** Makes the pickup pin draggable. */
+  onPickupDrag?: (point: LatLng) => void;
+  /** Makes the destination pin draggable. */
+  onDestinationDrag?: (point: LatLng) => void;
   className?: string;
 }
 

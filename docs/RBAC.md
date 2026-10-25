@@ -102,6 +102,7 @@ Request → JWT Guard → RolesGuard → OwnershipGuard → Controller → Servi
 |---|---|---|---|---|---|---|
 | `/rides` | POST | ✅ | ❌ | ❌ | None | Only passengers create rides |
 | `/rides` | GET | 🔒 | ❌ | 👑 | `passengerId = req.user.id` | Passenger sees own rides; Admin sees all |
+| `/rides/estimate` | GET | ✅ | ❌ | ❌ | None | Fare, distance and road route for a pickup/destination pair; no ride is created |
 | `/rides/active` | GET | 🔒 | ❌ | ❌ | `passengerId = req.user.id` | Returns the current active ride if any |
 | `/rides/:id` | GET | 🔒 | 🔒 | 👑 | Passenger: `ride.passenger_id = req.user.id`; Driver: must be assigned driver | |
 | `/rides/:id/cancel` | POST | 🔒 | ❌ | ❌ | `ride.passenger_id = req.user.id` | Only passenger can call this endpoint; Driver cancellation is via socket |

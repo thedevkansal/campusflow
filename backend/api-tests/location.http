@@ -10,8 +10,8 @@ Authorization: Bearer {{driverToken}}
 Content-Type: application/json
 
 {
-  "latitude": 12.9716,
-  "longitude": 77.5946
+  "latitude": 29.8654,
+  "longitude": 77.8894
 }
 
 # ─── REST: Driver Location Update ────────────────────────────────────────────
@@ -22,8 +22,8 @@ Authorization: Bearer {{driverToken}}
 Content-Type: application/json
 
 {
-  "latitude": 12.9720,
-  "longitude": 77.5950,
+  "latitude": 29.8656,
+  "longitude": 77.8898,
   "heading": 90,
   "speed": 25.5
 }
@@ -34,8 +34,8 @@ Authorization: Bearer {{driverToken}}
 Content-Type: application/json
 
 {
-  "latitude": 12.9725,
-  "longitude": 77.5955,
+  "latitude": 29.8658,
+  "longitude": 77.8902,
   "heading": 92,
   "speed": 27.0
 }
@@ -54,8 +54,8 @@ Authorization: Bearer {{driverToken}}
 #
 # Send driver:location event (triggers Redis update + BullMQ persistence job):
 #   socket.emit('driver:location', {
-#     latitude: 12.9716,
-#     longitude: 77.5946,
+#     latitude: 29.8654,
+#     longitude: 77.8894,
 #     heading: 90,
 #     speed: 25.0,
 #     timestamp: new Date().toISOString()

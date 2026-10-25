@@ -66,8 +66,8 @@ Kept for the audit and references, which still apply.
 
 ## 1. Understanding
 
-**Product.** CampusFlow is real-time ride-hailing inside one campus (Bengaluru,
-₹ fares, two-wheelers like "Honda Activa", fixed campus pickup points).
+**Product.** CampusFlow is real-time ride-hailing inside one campus (IIT Roorkee,
+₹ fares, two-wheelers like "Honda Activa", campus quick-pick stops or any point on the map).
 
 **Users.**
 - **Passengers:** students who need to get across campus now. Often on a phone,
@@ -161,7 +161,7 @@ surfaces, deep route-ink, and one marigold "auto-rickshaw" signal colour. The ri
 reads as a line on a transit map.*
 
 Why this fits the brief: CampusFlow's world is roads, stops and moving vehicles in
-Bengaluru, where the yellow auto-rickshaw is the default mental model of "a
+India, where the yellow auto-rickshaw is the default mental model of "a
 ride". Signage is the vernacular of telling someone where to go, fast and legibly,
 which is also the UX job of every screen here.
 

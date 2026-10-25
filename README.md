@@ -144,7 +144,9 @@ All variables are validated at startup in [`env.validation.ts`](backend/src/comm
 | `JWT_ACCESS_EXPIRES_IN` | Access-token lifetime | `15m` |
 | `JWT_REFRESH_EXPIRES_IN` | Refresh-token lifetime | `7d` |
 | `FARE_BASE_FARE` | Flat fare added to every ride | `50` |
-| `FARE_PER_KM_RATE` | Fare per km | `12` |
+| `FARE_PER_KM_RATE` | Fare per km (charged on road distance) | `12` |
+| `ROUTING_URL` | OSRM server for road distance + route line. Empty = straight-line pricing. The public demo has no SLA, so self-host for production. | `https://router.project-osrm.org` |
+| `ROUTING_TIMEOUT_MS` | Give up on the router after this long and fall back to straight-line distance | `4000` |
 | `MATCHING_RADIUS_KM` | Driver search radius | `5` |
 | `MATCHING_MAX_CANDIDATES` | Max drivers fetched from the GEO search | `20` |
 | `MATCHING_TOP_N` | Top-ranked drivers tried per match | `3` |
@@ -200,7 +202,7 @@ curl -X POST http://localhost:3001/api/v1/auth/login -H "Content-Type: applicati
 Replace `<ACCESS_TOKEN>` with the `accessToken` from the login response.
 
 ```bash
-curl -X POST http://localhost:3001/api/v1/rides -H "Content-Type: application/json" -H "Authorization: Bearer <ACCESS_TOKEN>" -d '{"pickupLat":12.9716,"pickupLng":77.5946,"pickupAddress":"Main Gate","destLat":12.9352,"destLng":77.6245,"destAddress":"Library"}'
+curl -X POST http://localhost:3001/api/v1/rides -H "Content-Type: application/json" -H "Authorization: Bearer <ACCESS_TOKEN>" -d '{"pickupLat":29.8654,"pickupLng":77.8894,"pickupAddress":"Main Gate","destLat":29.8653,"destLng":77.8948,"destAddress":"Library"}'
 ```
 
 The ride is returned with `"status": "SEARCHING"`, and matching starts in the background. Online drivers in range get a `ride_assigned` socket event.

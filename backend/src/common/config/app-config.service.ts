@@ -70,6 +70,17 @@ export class AppConfigService {
     return this.configService.get<number>('FARE_PER_KM_RATE', 12);
   }
 
+  // ─── Routing ─────────────────────────────────────────────────────────────────
+
+  /** OSRM base URL. Empty string disables road routing (straight-line fallback). */
+  get routingUrl(): string {
+    return this.configService.get<string>('ROUTING_URL', 'https://router.project-osrm.org');
+  }
+
+  get routingTimeoutMs(): number {
+    return this.configService.get<number>('ROUTING_TIMEOUT_MS', 4000);
+  }
+
   // ─── Matching Engine ─────────────────────────────────────────────────────────
 
   get matchingRadiusKm(): number {

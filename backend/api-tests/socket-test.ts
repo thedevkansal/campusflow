@@ -61,8 +61,8 @@ attach(driver, 'DRIVER');
 driver.on('connect', () => {
   setTimeout(() => {
     driver.emit('driver:location', {
-      latitude: 12.9716,
-      longitude: 77.5946,
+      latitude: 29.8654,
+      longitude: 77.8894,
       heading: 90,
       speed: 20,
     });
