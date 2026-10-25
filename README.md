@@ -20,13 +20,19 @@ Getting around a large campus often means waiting for a shuttle or messaging aro
 
 ## Demo
 
-| Landing | Passenger dashboard | Driver dashboard |
+| Landing | Passenger: driver on the way | Driver: waiting for a request |
 |---|---|---|
-| ![Landing page](assets/landing-page.png) | ![Passenger dashboard](assets/passenger-dashboard.png) | ![Driver dashboard](assets/driver-dashboard.png) |
+| ![Landing page](assets/redesign/landing-desktop.png) | ![Passenger tracking an accepted ride on the map](assets/redesign/ride-active-desktop.png) | ![Driver online and waiting for a request](assets/redesign/drive-online-desktop.png) |
 
-| Notifications | Profile |
-|---|---|
-| ![Notifications](assets/notifications.png) | ![Profile](assets/profile.png) |
+| Notifications | Profile | Log in |
+|---|---|---|
+| ![Notifications](assets/redesign/notifications-desktop.png) | ![Driver profile](assets/redesign/profile-driver-desktop.png) | ![Log in](assets/redesign/login-desktop.png) |
+
+On mobile:
+
+| Book a ride | Ride requested | New request (driver) | Driver online |
+|---|---|---|---|
+| <img src="assets/redesign/ride-idle-mobile.png" alt="Passenger picking From and To stops" width="200"> | <img src="assets/redesign/ride-searching-mobile.png" alt="Passenger waiting for a driver" width="200"> | <img src="assets/redesign/drive-request-mobile.png" alt="Driver with Accept and Decline buttons" width="200"> | <img src="assets/redesign/drive-online-mobile.png" alt="Driver online card" width="200"> |
 
 <!-- TODO: add a short GIF of a full ride (request → match → accept → complete). -->
 
