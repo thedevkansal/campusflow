@@ -4,6 +4,7 @@
  * Routes implemented:
  *   POST   /rides            — create ride (PASSENGER only)
  *   GET    /rides            — list own rides (PASSENGER only in Phase 3A)
+ *   GET    /rides/estimate   — fare + route quote (PASSENGER only)
  *   GET    /rides/active     — current active ride (PASSENGER only)
  *   GET    /rides/:id        — ride detail (PASSENGER 🔒, DRIVER 🔒, ADMIN 👑)
  *   POST   /rides/:id/cancel — cancel ride (PASSENGER only)
@@ -25,12 +26,14 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
-import { RidesService, RideResponseData } from './rides.service';
+import { RidesService, RideResponseData, FareEstimateResponseData } from './rides.service';
 import { CreateRideDto } from './dto/create-ride.dto';
 import { CancelRideDto } from './dto/cancel-ride.dto';
 import { CancelDriverDto } from './dto/cancel-driver.dto';
+import { EstimateFareDto } from './dto/estimate-fare.dto';
 import { JwtAuthGuard } from '@modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from '@modules/auth/guards/roles.guard';
 import { DevOnlyGuard } from '@common/guards/dev-only.guard';
@@ -80,6 +83,23 @@ export class RidesController {
   ): Promise<ApiSuccessResponse<RideResponseData[]>> {
     const data = await this.ridesService.listRides(user.id, user.role as Role);
     return { success: true, data, message: 'Rides retrieved successfully' };
+  }
+
+  /**
+   * GET /api/v1/rides/estimate?pickupLat=&pickupLng=&destLat=&destLng=
+   *
+   * PASSENGER only — fare, distance and route line for a trip, before booking.
+   * Declared BEFORE /rides/:id so 'estimate' is not parsed as a UUID.
+   */
+  @Get('estimate')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(RolesGuard)
+  @Roles(Role.PASSENGER)
+  async estimateFare(
+    @Query() dto: EstimateFareDto,
+  ): Promise<ApiSuccessResponse<FareEstimateResponseData>> {
+    const data = await this.ridesService.estimateFare(dto);
+    return { success: true, data, message: 'Fare estimated successfully' };
   }
 
   /**

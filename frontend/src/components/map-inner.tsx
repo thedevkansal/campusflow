@@ -2,11 +2,10 @@
 
 import { useEffect, useMemo } from 'react';
 import L from 'leaflet';
-import { MapContainer, TileLayer, Marker, Polyline, Tooltip, ZoomControl, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Polyline, Tooltip, ZoomControl, useMap, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import type { MapProps } from './map';
-
-const CAMPUS_CENTER: [number, number] = [12.9716, 77.5946];
+import type { LatLng, MapProps } from './map';
+import { CAMPUS_CENTER } from '@/lib/campus';
 
 // Pins are drawn with the same vocabulary as the route line (see globals.css).
 const pin = (kind: 'from' | 'to' | 'driver') =>
@@ -37,7 +36,28 @@ function FitToRoute({ points }: { points: [number, number][] }) {
   return null;
 }
 
-export default function MapInner({ pickup, destination, driver }: MapProps) {
+function ClickHandler({ onClick }: { onClick: (point: LatLng) => void }) {
+  useMapEvents({ click: (e) => onClick({ lat: e.latlng.lat, lng: e.latlng.lng }) });
+  return null;
+}
+
+const dragEnd = (cb?: (point: LatLng) => void) =>
+  cb && {
+    dragend: (e: L.LeafletEvent) => {
+      const { lat, lng } = (e.target as L.Marker).getLatLng();
+      cb({ lat, lng });
+    },
+  };
+
+export default function MapInner({
+  pickup,
+  destination,
+  driver,
+  route,
+  onMapClick,
+  onPickupDrag,
+  onDestinationDrag,
+}: MapProps) {
   const icons = useMemo(() => ({ from: pin('from'), to: pin('to'), driver: pin('driver') }), []);
 
   // Frame the stops; the driver only moves the view when there is no route yet.
@@ -46,13 +66,20 @@ export default function MapInner({ pickup, destination, driver }: MapProps) {
   if (destination) framePoints.push([destination.lat, destination.lng]);
   if (!framePoints.length && driver) framePoints.push([driver.lat, driver.lng]);
 
+  const line: [number, number][] | null =
+    pickup && destination
+      ? route && route.length >= 2
+        ? route
+        : [[pickup.lat, pickup.lng], [destination.lat, destination.lng]]
+      : null;
+
   return (
     <MapContainer
-      center={framePoints[0] ?? CAMPUS_CENTER}
+      center={framePoints[0] ?? [CAMPUS_CENTER.lat, CAMPUS_CENTER.lng]}
       zoom={16}
       scrollWheelZoom={false}
       zoomControl={false}
-      style={{ height: '100%', width: '100%' }}
+      style={{ height: '100%', width: '100%', cursor: onMapClick ? 'crosshair' : undefined }}
     >
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -60,28 +87,38 @@ export default function MapInner({ pickup, destination, driver }: MapProps) {
       />
       <ZoomControl position="bottomright" />
       <FitToRoute points={framePoints} />
+      {onMapClick && <ClickHandler onClick={onMapClick} />}
 
-      {pickup && destination && (
+      {line && (
         <>
           {/* White casing + teal core so the route reads on any map tile */}
           <Polyline
-            positions={[[pickup.lat, pickup.lng], [destination.lat, destination.lng]]}
-            pathOptions={{ color: '#ffffff', weight: 10, opacity: 0.95, lineCap: 'round' }}
+            positions={line}
+            pathOptions={{ color: '#ffffff', weight: 10, opacity: 0.95, lineCap: 'round', lineJoin: 'round' }}
           />
-          <Polyline
-            positions={[[pickup.lat, pickup.lng], [destination.lat, destination.lng]]}
-            pathOptions={{ color: '#0b7f68', weight: 5, lineCap: 'round' }}
-          />
+          <Polyline positions={line} pathOptions={{ color: '#0b7f68', weight: 5, lineCap: 'round', lineJoin: 'round' }} />
         </>
       )}
 
       {pickup && (
-        <Marker position={[pickup.lat, pickup.lng]} icon={icons.from} title={pickup.label || 'Pickup'}>
+        <Marker
+          position={[pickup.lat, pickup.lng]}
+          icon={icons.from}
+          title={pickup.label || 'Pickup'}
+          draggable={!!onPickupDrag}
+          eventHandlers={dragEnd(onPickupDrag)}
+        >
           <Tooltip direction="top" offset={[0, -10]}>{pickup.label || 'Pickup'}</Tooltip>
         </Marker>
       )}
       {destination && (
-        <Marker position={[destination.lat, destination.lng]} icon={icons.to} title={destination.label || 'Destination'}>
+        <Marker
+          position={[destination.lat, destination.lng]}
+          icon={icons.to}
+          title={destination.label || 'Destination'}
+          draggable={!!onDestinationDrag}
+          eventHandlers={dragEnd(onDestinationDrag)}
+        >
           <Tooltip direction="top" offset={[0, -10]}>{destination.label || 'Destination'}</Tooltip>
         </Marker>
       )}

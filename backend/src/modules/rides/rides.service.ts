@@ -34,6 +34,7 @@ import {
 import { CreateRideDto } from './dto/create-ride.dto';
 import { CancelRideDto } from './dto/cancel-ride.dto';
 import { CancelDriverDto } from './dto/cancel-driver.dto';
+import { EstimateFareDto } from './dto/estimate-fare.dto';
 import { DriversRepository } from '@modules/drivers/drivers.repository';
 import { RedisService } from '@modules/redis/redis.service';
 import { QUEUE_NAMES, JOB_NAMES, JOB_IDS, QUEUE_JOB_OPTIONS } from '@modules/queue/queue.constants';
@@ -87,6 +88,16 @@ export interface RideResponseData {
   currentDriverLocation?: DriverCurrentLocation | null;
 }
 
+export interface FareEstimateResponseData {
+  distanceKm: number;
+  estimatedFare: number;
+  /** Driving minutes; null when priced by straight line */
+  durationMin: number | null;
+  /** Route polyline as [lat, lng] pairs */
+  route: [number, number][];
+  source: 'road' | 'straight-line';
+}
+
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 @Injectable()
@@ -103,6 +114,23 @@ export class RidesService {
     private readonly prisma: PrismaService,
     @InjectQueue(QUEUE_NAMES.RIDE_MATCHING) private readonly rideMatchingQueue: Queue,
   ) {}
+
+  /**
+   * Fare quote for a pickup → destination pair, before any ride exists.
+   * Uses the same estimate as createRide, so the quoted price is the stored price.
+   */
+  async estimateFare(dto: EstimateFareDto): Promise<FareEstimateResponseData> {
+    const est = await this.fareEngine.estimate(
+      dto.pickupLat, dto.pickupLng, dto.destLat, dto.destLng,
+    );
+    return {
+      distanceKm: est.distanceKm,
+      estimatedFare: est.estimatedFare,
+      durationMin: est.durationMin != null ? Math.round(est.durationMin) : null,
+      route: est.geometry,
+      source: est.source,
+    };
+  }
 
   /**
    * Create a new ride request.
@@ -153,8 +181,8 @@ export class RidesService {
       });
     }
 
-    // Estimate fare before persisting (Phase 5)
-    const fareEstimate = this.fareEngine.estimate(
+    // Estimate fare before persisting (Phase 5) — road distance, straight-line fallback
+    const fareEstimate = await this.fareEngine.estimate(
       dto.pickupLat, dto.pickupLng, dto.destLat, dto.destLng,
     );
 
@@ -645,10 +673,14 @@ export class RidesService {
       });
     }
 
-    const { distanceKm, estimatedFare: fareAmount } = this.fareEngine.estimate(
-      Number(ride.pickupLat), Number(ride.pickupLng),
-      Number(ride.destLat), Number(ride.destLng),
-    );
+    // Charge the distance quoted at request time; re-route only for legacy rides without one.
+    const distanceKm = ride.estimatedDistanceKm != null
+      ? Number(ride.estimatedDistanceKm)
+      : (await this.fareEngine.estimate(
+          Number(ride.pickupLat), Number(ride.pickupLng),
+          Number(ride.destLat), Number(ride.destLng),
+        )).distanceKm;
+    const fareAmount = this.fareEngine.fareForDistance(distanceKm);
     const updated = await this.ridesRepository.completeRide(rideId, driverId, fareAmount, distanceKm);
     await this.driversRepository.updateStatus(driverId, DriverStatus.ONLINE);
 

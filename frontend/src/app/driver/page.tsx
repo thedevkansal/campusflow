@@ -15,11 +15,12 @@ import { api, getErrorMessage } from '@/lib/api';
 import { useSocket } from '@/context/socket-context';
 import { useRequireAuth } from '@/hooks/use-require-auth';
 import { DRIVER_STATUS, shortRideId } from '@/lib/ride-status';
+import { CAMPUS_CENTER } from '@/lib/campus';
 import { cn } from '@/lib/utils';
 
 // Campus center fallback for when geolocation is unavailable
-const CAMPUS_LAT = 12.9716;
-const CAMPUS_LNG = 77.5946;
+const CAMPUS_LAT = CAMPUS_CENTER.lat;
+const CAMPUS_LNG = CAMPUS_CENTER.lng;
 
 // The one next step for each status. Labels match the toast that confirms them.
 const NEXT_ACTION: Record<string, { action: string; label: string; done: string }> = {
@@ -171,7 +172,13 @@ export default function DriverDashboardPage() {
   // Online toggle
   const toggleOnlineMutation = useMutation({
     mutationFn: async (goOnline: boolean) => {
-      await api.post(goOnline ? '/drivers/online' : '/drivers/offline');
+      if (goOnline) {
+        // Send our position so matching can find us before the first heartbeat.
+        const { latitude, longitude } = await getGeolocation();
+        await api.post('/drivers/online', { latitude, longitude });
+      } else {
+        await api.post('/drivers/offline');
+      }
       return goOnline;
     },
     onSuccess: (goOnline) => {

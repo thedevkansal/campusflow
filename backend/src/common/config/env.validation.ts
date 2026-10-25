@@ -37,6 +37,10 @@ export const envValidationSchema = Joi.object({
   MATCHING_WEIGHT_RATING: Joi.number().min(0).max(1).default(0.3),
   MATCHING_WEIGHT_ACCEPTANCE: Joi.number().min(0).max(1).default(0.2),
 
+  // Road routing (OSRM-compatible). Empty string disables it → straight-line fares.
+  ROUTING_URL: Joi.string().uri({ scheme: ['http', 'https'] }).allow('').default('https://router.project-osrm.org'),
+  ROUTING_TIMEOUT_MS: Joi.number().integer().positive().default(4000),
+
   // Monitoring
   SENTRY_DSN: Joi.string().uri().optional(),
 
